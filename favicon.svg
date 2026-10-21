@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <rect width="120" height="120" rx="28" fill="#0f172a" />
+  <rect x="3" y="3" width="114" height="114" rx="25" stroke="#2563eb" stroke-opacity="0.45" stroke-width="2" />
+  <polygon
+    points="60,18 96,38.5 96,79.5 60,100 24,79.5 24,38.5"
+    stroke="#38bdf8"
+    stroke-width="4.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <polygon
+    points="60,34 82,46.8 82,71.2 60,84 38,71.2 38,46.8"
+    stroke="#2563eb"
+    stroke-width="6.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    fill="#1e293b"
+  />
+  <circle cx="60" cy="59" r="5" fill="#ff7a00" />
+  <circle cx="60" cy="18" r="5.5" fill="#ff7a00" />
+  <circle cx="96" cy="38.5" r="5.2" fill="#38bdf8" />
+  <circle cx="96" cy="79.5" r="5.2" fill="#38bdf8" />
+  <circle cx="60" cy="100" r="5.5" fill="#ff7a00" />
+  <circle cx="24" cy="79.5" r="5.2" fill="#38bdf8" />
+  <circle cx="24" cy="38.5" r="5.2" fill="#38bdf8" />
+  <polyline
+    points="36,99 60,111 84,99"
+    stroke="#38bdf8"
+    stroke-width="4"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+</svg>

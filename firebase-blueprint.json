@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "products": {
+      "title": "Products and Systems",
+      "description": "Catalog of systems, software products, and IT services created or maintained by Raul Rodriguez",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "category": { "type": "string" },
+        "categoryLabel": { "type": "string" },
+        "description": { "type": "string" },
+        "longDescription": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "gallery": { "type": "array", "items": { "type": "string" } },
+        "deliverables": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "technologies": { "type": "array", "items": { "type": "string" } },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "price": { "type": "string" },
+        "status": { "type": "string" },
+        "year": { "type": "string" },
+        "demoUrl": { "type": "string" },
+        "order": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "description", "category"]
+    },
+    "categories": {
+      "title": "Showcase Categories",
+      "description": "Categories for filtering products and systems in the catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "label"]
+    },
+    "profile": {
+      "title": "User Profile and Configuration",
+      "description": "Raul Rodriguez's professional profile, bio, contact details, and tech stack",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "bio": { "type": "string" },
+        "location": { "type": "string" },
+        "email": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "availability": { "type": "string" },
+        "stats": { "type": "array" },
+        "socials": { "type": "array" },
+        "skills": { "type": "array" },
+        "experience": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "settings": {
+      "title": "System Settings",
+      "description": "Administrative settings and password hashes",
+      "type": "object",
+      "properties": {
+        "adminPassword": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "products",
+      "description": "Public catalog products and systems"
+    },
+    "/categories/{categoryId}": {
+      "schema": "categories",
+      "description": "Showcase category filters"
+    },
+    "/siteConfig/{configId}": {
+      "schema": "profile",
+      "description": "Site profile, contact, and settings documents"
+    }
+  }
+}
