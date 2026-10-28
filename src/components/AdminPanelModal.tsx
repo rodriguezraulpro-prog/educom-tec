@@ -44,7 +44,16 @@ import {
   getAdminPassword,
   resetPortfolioData,
 } from '../data/portfolioData';
-import { saveAdminPasswordToCloud, deleteProductFromCloud } from '../lib/firestoreService';
+import {
+  saveAdminPasswordToCloud,
+  deleteProductFromCloud,
+  getNocoDBConfig,
+  saveNocoDBConfig,
+  syncAllProductsToCloud,
+  syncCategoriesToCloud,
+  saveProfileToCloud,
+  NocoDBConfig,
+} from '../lib/firestoreService';
 import { downloadStandaloneHtml } from '../utils/exportStandaloneHtml';
 
 async function compressImageFile(file: File, maxWidth = 1280, quality = 0.82): Promise<string> {
@@ -132,6 +141,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  // NocoDB configuration state
+  const [nocoConfig, setNocoConfig] = useState<NocoDBConfig>(() => getNocoDBConfig());
+  const [isSyncingNoco, setIsSyncingNoco] = useState(false);
 
   // Experience editing
   const [editingExpIdx, setEditingExpIdx] = useState<number | null>(null);
@@ -2623,11 +2636,127 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             <div className="space-y-6">
               <div>
                 <h3 className="text-base font-bold font-syne text-white">
-                  Seguridad, Clave de Acceso & Opciones de Sistema
+                  Base de Datos NocoDB, Seguridad & Opciones de Sistema
                 </h3>
                 <p className="text-xs text-zinc-400 font-mono">
-                  Cambia tu contraseña de administrador o restablece la plataforma si fuera necesario.
+                  Gestiona la conexión en vivo con NocoDB Cloud, tu clave de administrador o el respaldo general.
                 </p>
+              </div>
+
+              {/* NocoDB Cloud Connection Card */}
+              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#00c2b2]/40 space-y-4 max-w-2xl">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#00c2b2] animate-pulse" />
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2]">
+                      Base de Datos Principal: NocoDB Cloud (Conectada)
+                    </span>
+                  </div>
+                  <a
+                    href={`${nocoConfig.baseUrl}/#/nc/${nocoConfig.baseId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#00c2b2] hover:underline"
+                  >
+                    <span>Abrir Base en NocoDB</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                      URL Servidor NocoDB
+                    </label>
+                    <input
+                      type="text"
+                      value={nocoConfig.baseUrl}
+                      onChange={(e) => setNocoConfig({ ...nocoConfig, baseUrl: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                      Base ID (Proyecto)
+                    </label>
+                    <input
+                      type="text"
+                      value={nocoConfig.baseId}
+                      onChange={(e) => setNocoConfig({ ...nocoConfig, baseId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                      API Token (xc-token)
+                    </label>
+                    <input
+                      type="password"
+                      value={nocoConfig.apiToken}
+                      onChange={(e) => setNocoConfig({ ...nocoConfig, apiToken: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                      Tabla Productos (ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={nocoConfig.productsTableId}
+                      onChange={(e) => setNocoConfig({ ...nocoConfig, productsTableId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                      Tabla Categorías / Config (IDs)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={nocoConfig.categoriesTableId}
+                        onChange={(e) => setNocoConfig({ ...nocoConfig, categoriesTableId: e.target.value })}
+                        title="ID Tabla Categorías"
+                        className="w-full px-2.5 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
+                      />
+                      <input
+                        type="text"
+                        value={nocoConfig.configTableId}
+                        onChange={(e) => setNocoConfig({ ...nocoConfig, configTableId: e.target.value })}
+                        title="ID Tabla Configuración"
+                        className="w-full px-2.5 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isSyncingNoco}
+                    onClick={async () => {
+                      setIsSyncingNoco(true);
+                      try {
+                        saveNocoDBConfig(nocoConfig);
+                        await Promise.all([
+                          syncAllProductsToCloud(draftProducts),
+                          syncCategoriesToCloud(draftCategories),
+                          saveProfileToCloud(draftProfile),
+                        ]);
+                        showToast('Conexión guardada y datos sincronizados con NocoDB Cloud.');
+                      } catch {
+                        showToast('Error al sincronizar con NocoDB. Verifica las credenciales.');
+                      } finally {
+                        setIsSyncingNoco(false);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSyncingNoco ? 'Sincronizando con NocoDB...' : 'Guardar & Sincronizar Todo con NocoDB'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Change password card */}
@@ -2704,7 +2833,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           <span>Firmado & Autenticado: Raúl Eduardo Rodríguez // Educom-Tec</span>
           <span className="text-[#00c2b2] flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#00c2b2] animate-pulse" />
-            <span>Sincronizado con Google Cloud Firestore (Público & Global)</span>
+            <span>Sincronizado con NocoDB Cloud (Base: {nocoConfig.baseId})</span>
           </span>
         </div>
       </div>
