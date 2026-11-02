@@ -99,44 +99,45 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
         </div>
 
         {/* Filter and Navigation Toolbar */}
-        <div className="space-y-4 pb-6 mb-8 border-b border-slate-200 dark:border-slate-800">
-          
-          {/* Top Row: Search Input & View Mode Controls (Placed ABOVE categories) */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="space-y-4 pb-6 mb-6 sm:mb-8 border-b border-slate-200 dark:border-slate-800">
+          {/* Top Row: Search Input & View Mode Controls */}
+          <div className="flex flex-row items-center justify-between gap-2.5 sm:gap-3">
             {/* Search Input */}
             <div className="relative flex-1 max-w-full sm:max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 id="search-product-input"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por tecnología, sistema o requerimiento..."
-                className="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 shadow-xs transition-all font-sans"
+                placeholder="Buscar sistema, ERP, POS o tecnología..."
+                className="w-full min-h-[44px] pl-10 pr-9 py-2.5 text-sm rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 shadow-xs transition-all font-sans"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white p-2 cursor-pointer"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center self-end sm:self-auto rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 shrink-0 shadow-xs">
+            <div className="flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 shrink-0 shadow-xs">
               <button
                 type="button"
                 id="view-grid-btn"
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-full text-xs transition-colors cursor-pointer ${
+                className={`min-w-[38px] min-h-[36px] flex items-center justify-center rounded-full text-xs transition-colors cursor-pointer ${
                   viewMode === 'grid'
                     ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium shadow-xs'
                     : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
                 title="Vista en tarjetas"
+                aria-label="Vista en tarjetas"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
@@ -144,20 +145,21 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                 type="button"
                 id="view-list-btn"
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-full text-xs transition-colors cursor-pointer ${
+                className={`min-w-[38px] min-h-[36px] flex items-center justify-center rounded-full text-xs transition-colors cursor-pointer ${
                   viewMode === 'list'
                     ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium shadow-xs'
                     : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
                 title="Vista en lista"
+                aria-label="Vista en lista"
               >
                 <List className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Bottom Row: Category Tabs (Full width, not cramped) */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar pt-1">
+          {/* Bottom Row: Swipeable Category Tabs on Mobile */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               const count = categoryCounts[cat.id] || 0;
@@ -167,7 +169,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   id={`cat-btn-${cat.id}`}
                   type="button"
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-full transition-all whitespace-nowrap cursor-pointer border ${
+                  className={`min-h-[40px] inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-full transition-all whitespace-nowrap cursor-pointer border shrink-0 ${
                     isSelected
                       ? 'bg-[#1d4ed8] text-white border-[#1d4ed8] shadow-sm shadow-blue-500/20'
                       : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -175,7 +177,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                 >
                   <span>{cat.label}</span>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold tabular-nums ${
                       isSelected
                         ? 'bg-white/20 text-white'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
@@ -191,7 +193,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
               <button
                 type="button"
                 onClick={onOpenAdminPanel}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-full bg-blue-50 hover:bg-blue-100 text-[#2563eb] border border-blue-200 dark:bg-blue-950/40 dark:text-[#38bdf8] dark:border-blue-800 transition-colors cursor-pointer shrink-0"
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-full bg-blue-50 hover:bg-blue-100 text-[#2563eb] border border-blue-200 dark:bg-blue-950/40 dark:text-[#38bdf8] dark:border-blue-800 transition-colors cursor-pointer shrink-0"
                 title="Editar o añadir nuevas categorías en el Panel Administrativo"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -202,7 +204,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
         </div>
 
         {/* Results Counter */}
-        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-6 font-medium">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 mb-6 font-medium">
           <span>
             Mostrando <strong className="text-slate-900 dark:text-white font-bold">{filteredProducts.length}</strong> soluciones disponibles
           </span>
@@ -229,7 +231,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                 setSelectedCategory('all');
                 setSearchQuery('');
               }}
-              className="mt-4 px-5 py-2.5 text-xs font-semibold text-white bg-[#1d4ed8] rounded-full hover:bg-[#1e40af] transition-colors shadow-xs"
+              className="mt-4 min-h-[44px] px-5 py-2.5 text-xs font-semibold text-white bg-[#1d4ed8] rounded-full hover:bg-[#1e40af] transition-colors shadow-xs cursor-pointer"
             >
               Restablecer filtros
             </button>
@@ -238,12 +240,12 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
 
         {/* GRID VIEW */}
         {viewMode === 'grid' && filteredProducts.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7">
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
                 id={`product-card-${product.id}`}
-                className="group flex flex-col rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-blue-400/80 dark:hover:border-blue-600 transition-all duration-300 shadow-xs hover:shadow-xl hover:-translate-y-1"
+                className="group flex flex-col rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-blue-400/80 dark:hover:border-blue-600 transition-all duration-300 shadow-xs hover:shadow-xl sm:hover:-translate-y-1"
               >
                 {/* Thumbnail Container */}
                 <div
@@ -257,25 +259,25 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
                   {/* Category Pill */}
-                  <div className="absolute top-3.5 left-3.5">
+                  <div className="absolute top-3 left-3">
                     <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-200 shadow-sm backdrop-blur-xs">
                       {product.categoryLabel}
                     </span>
                   </div>
 
                   {product.price && (
-                    <div className="absolute top-3.5 right-3.5">
+                    <div className="absolute top-3 right-3">
                       <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-500 text-white shadow-md">
                         {product.price}
                       </span>
                     </div>
                   )}
 
-                  {/* Hover icon */}
-                  <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Hover / Mobile tap icon */}
+                  <div className="absolute bottom-3 right-3 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <span className="p-2 rounded-full bg-[#1d4ed8] text-white inline-flex items-center justify-center shadow-lg">
                       <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
                     </span>
@@ -283,7 +285,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                 </div>
 
                 {/* Card Content */}
-                <div className="flex flex-col flex-1 p-5 sm:p-6">
+                <div className="flex flex-col flex-1 p-4 sm:p-6">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-[11px] font-medium text-slate-400">
                       Año: {product.year}
@@ -326,19 +328,19 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                     ))}
                   </div>
 
-                  {/* Card Actions */}
-                  <div className="flex items-center gap-2.5 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  {/* Card Actions (42px+ touch targets for mobile phones) */}
+                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={() => onSelectProduct(product)}
-                      className="flex-1 py-2 px-3 text-xs font-semibold text-center rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                      className="min-h-[42px] flex-1 py-2 px-3 text-xs font-semibold text-center rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                     >
-                      Detalles
+                      Ver Detalles
                     </button>
                     <button
                       type="button"
                       onClick={() => onContactProduct(product)}
-                      className="py-2 px-4 text-xs font-semibold rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white transition-colors cursor-pointer shadow-xs"
+                      className="min-h-[42px] py-2 px-4 text-xs font-semibold rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white transition-colors cursor-pointer shadow-xs"
                       title="Solicitar o consultar por este producto"
                     >
                       Consultar
@@ -357,11 +359,11 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
               <div
                 key={product.id}
                 id={`product-list-${product.id}`}
-                className="group flex flex-col md:flex-row items-start md:items-center justify-between gap-6 py-5 hover:bg-white dark:hover:bg-slate-900/60 px-4 rounded-2xl transition-colors"
+                className="group flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 py-5 hover:bg-white dark:hover:bg-slate-900/60 px-3 sm:px-4 rounded-2xl transition-colors"
               >
                 {/* Thumbnail & Title */}
                 <div
-                  className="flex items-start gap-4 cursor-pointer flex-1"
+                  className="flex items-start gap-3.5 sm:gap-4 cursor-pointer flex-1 w-full"
                   onClick={() => onSelectProduct(product)}
                 >
                   <img
@@ -371,8 +373,8 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                     className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
                     loading="lazy"
                   />
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-[10px] font-semibold text-[#2563eb] dark:text-[#38bdf8]">
                         {product.categoryLabel}
                       </span>
@@ -385,18 +387,18 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                     <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white group-hover:text-[#2563eb] transition-colors font-sans">
                       {product.title}
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
                       {product.subtitle}
                     </p>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 line-clamp-1 max-w-xl">
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 line-clamp-2 sm:line-clamp-1 max-w-xl">
                       {product.description}
                     </p>
                   </div>
                 </div>
 
                 {/* Right Metadata & Actions */}
-                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end shrink-0">
-                  <div className="text-right">
+                <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto justify-between md:justify-end shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800/80">
+                  <div className="text-left md:text-right">
                     <span className="text-sm font-bold text-[#ff7a00] block">
                       {product.price || 'A medida'}
                     </span>
@@ -407,14 +409,14 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectProduct(product)}
-                      className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                      className="min-h-[42px] px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                     >
                       Detalles
                     </button>
                     <button
                       type="button"
                       onClick={() => onContactProduct(product)}
-                      className="px-4 py-2 text-xs font-semibold rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white transition-colors cursor-pointer shadow-xs"
+                      className="min-h-[42px] px-4 py-2 text-xs font-semibold rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white transition-colors cursor-pointer shadow-xs"
                     >
                       Consultar
                     </button>

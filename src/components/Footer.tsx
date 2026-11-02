@@ -1,24 +1,45 @@
 import React from 'react';
-import { ArrowUp, ShieldCheck } from 'lucide-react';
+import { ArrowUp, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { UserProfile } from '../types';
 import { DigitalSignature, EducomTecIcon } from './DigitalSignature';
 
 interface FooterProps {
   profile: UserProfile;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
+  onNavigate?: (sectionId: string) => void;
+  isAdminLoggedIn?: boolean;
+  onOpenAdminLogin?: () => void;
+  onOpenAdminPanel?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ profile }) => {
+export const Footer: React.FC<FooterProps> = ({
+  profile,
+  isDark = true,
+  onToggleTheme,
+  isAdminLoggedIn = false,
+  onOpenAdminLogin,
+  onOpenAdminPanel,
+}) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleOpenAdmin = () => {
+    if (isAdminLoggedIn && onOpenAdminPanel) {
+      onOpenAdminPanel();
+    } else if (onOpenAdminLogin) {
+      onOpenAdminLogin();
+    } else if (onOpenAdminPanel) {
+      onOpenAdminPanel();
+    }
+  };
+
   return (
-    <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070a12] py-14 text-slate-600 dark:text-slate-400 transition-colors duration-300">
+    <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070a12] py-12 sm:py-14 text-slate-600 dark:text-slate-400 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        
         {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 pb-10 border-b border-slate-100 dark:border-slate-800/80 items-start">
-          
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 sm:gap-10 pb-10 border-b border-slate-100 dark:border-slate-800/80 items-start">
           {/* Brand & Signature Column */}
           <div className="md:col-span-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -51,39 +72,39 @@ export const Footer: React.FC<FooterProps> = ({ profile }) => {
             </p>
             <ul className="space-y-2.5 font-medium">
               <li>
-                <a href="#hero" className="hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
+                <a href="#hero" className="inline-block py-1 hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
                   Inicio
                 </a>
               </li>
               <li>
-                <a href="#about" className="hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
-                  Sobre Mí & Enfoque
-                </a>
-              </li>
-              <li>
-                <a href="#showcase" className="hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
+                <a href="#showcase" className="inline-block py-1 hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
                   Catálogo de Sistemas TI
                 </a>
               </li>
               <li>
-                <a href="#workflow" className="hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
+                <a href="#about" className="inline-block py-1 hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
+                  Sobre Mí & Enfoque
+                </a>
+              </li>
+              <li>
+                <a href="#workflow" className="inline-block py-1 hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
                   Metodología de Trabajo
                 </a>
               </li>
               <li>
-                <a href="#contact" className="hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
+                <a href="#contact" className="inline-block py-1 hover:text-[#2563eb] dark:hover:text-[#38bdf8] transition-colors">
                   Contacto & Cotización
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Meta & Back to top */}
-          <div className="md:col-span-3 space-y-4 text-xs">
+          {/* Meta, Theme Toggle & Back to top */}
+          <div className="md:col-span-3 space-y-3.5 text-xs">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200 mb-2 font-sans">
-              Garantía & Disponibilidad
+              Preferencias & Gestión
             </p>
-            
+
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -94,24 +115,54 @@ export const Footer: React.FC<FooterProps> = ({ profile }) => {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={scrollToTop}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-            >
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>Volver arriba</span>
-            </button>
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {onToggleTheme && (
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className="min-h-[40px] inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                >
+                  {isDark ? (
+                    <>
+                      <Sun className="w-3.5 h-3.5 text-[#ff7a00]" />
+                      <span>Modo Claro</span>
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="w-3.5 h-3.5 text-[#2563eb]" />
+                      <span>Modo Oscuro</span>
+                    </>
+                  )}
+                </button>
+              )}
 
+              <button
+                type="button"
+                onClick={handleOpenAdmin}
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#2563eb] dark:text-[#38bdf8]" />
+                <span>Panel Admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={scrollToTop}
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+                <span>Subir</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 dark:text-slate-500">
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 dark:text-slate-500 text-center sm:text-left">
           <p>
             &copy; {new Date().getFullYear()} Raúl Eduardo Rodríguez &bull; Educom-Tec. Todos los derechos reservados.
           </p>
-          <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-3 sm:gap-4 text-[11px]">
             <span>Soporte TI</span>
             <span>&bull;</span>
             <span>Desarrollo Web</span>
@@ -119,8 +170,8 @@ export const Footer: React.FC<FooterProps> = ({ profile }) => {
             <span>Redes & Sistemas</span>
           </div>
         </div>
-
       </div>
     </footer>
   );
 };
+

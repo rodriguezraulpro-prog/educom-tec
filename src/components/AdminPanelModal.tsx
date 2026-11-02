@@ -24,7 +24,6 @@ import {
   Facebook,
   Globe,
   Youtube,
-  Twitter,
   Download,
   LayoutDashboard,
   Search,
@@ -42,6 +41,8 @@ import {
   Award,
   AlertTriangle,
   Menu,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import {
   ProductOrProject,
@@ -117,6 +118,9 @@ interface AdminPanelModalProps {
   isAuthenticated?: boolean;
   cloudPassword?: string | null;
   onLoginSuccess?: () => void;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
+  onSetTheme?: (dark: boolean) => void;
 }
 
 type AdminTab =
@@ -143,6 +147,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   isAuthenticated = true,
   cloudPassword = null,
   onLoginSuccess,
+  isDark = true,
+  onToggleTheme,
+  onSetTheme,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -200,6 +207,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newSocialName, setNewSocialName] = useState('');
   const [newSocialUrl, setNewSocialUrl] = useState('');
   const [isAddingSocial, setIsAddingSocial] = useState(false);
+
+  const handleSelectTheme = (darkVal: boolean) => {
+    if (onSetTheme) {
+      onSetTheme(darkVal);
+    } else if (onToggleTheme && isDark !== darkVal) {
+      onToggleTheme();
+    } else {
+      const root = document.documentElement;
+      if (darkVal) root.classList.add('dark');
+      else root.classList.remove('dark');
+      try {
+        localStorage.setItem('educom_theme_mode', darkVal ? 'dark' : 'light');
+      } catch {
+        // Ignore
+      }
+    }
+  };
 
   React.useEffect(() => {
     if (isOpen) {
@@ -280,49 +304,80 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen w-full bg-[#0b0e14] text-zinc-100 flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
-        <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
+      <div className="min-h-screen w-full bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-zinc-100 flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden transition-colors duration-300">
+        <div className="max-w-7xl w-full mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-[#0b0e14] shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-white shadow-lg shrink-0">
               <ShieldCheck className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
-              <span className="text-base font-bold font-syne text-white tracking-tight block">
+              <span className="text-sm sm:text-base font-bold font-syne text-slate-900 dark:text-white tracking-tight block">
                 Educom-Tec // Admin Center
               </span>
-              <span className="text-[11px] font-mono text-zinc-400 block">
-                admin.html • consola de gestión y base de datos NocoDB
+              <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 block">
+                admin.html • consola de gestión y NocoDB
               </span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#161b22] hover:bg-[#1f2630] border border-[#2d3542] text-xs font-mono text-zinc-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Volver a la Web Pública (index.html)</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Theme Switcher on Login Screen */}
+            <div className="inline-flex items-center p-0.5 rounded-xl bg-slate-200/80 dark:bg-[#161b22] border border-slate-300 dark:border-[#2d3542]">
+              <button
+                type="button"
+                onClick={() => handleSelectTheme(false)}
+                className={`min-h-[36px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  !isDark
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5 text-[#ff7a00]" />
+                <span>Claro</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTheme(true)}
+                className={`min-h-[36px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isDark
+                    ? 'bg-[#2563eb] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span>Oscuro</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[40px] inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#1f2630] border border-slate-200 dark:border-[#2d3542] text-xs font-mono text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer shadow-xs"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Volver a la Web Pública</span>
+              <span className="sm:hidden">Web</span>
+            </button>
+          </div>
         </div>
 
-        <div className="max-w-md w-full mx-auto my-auto py-12">
-          <div className="p-7 sm:p-8 rounded-3xl bg-[#12161f] border border-[#262d3a] shadow-2xl space-y-6">
+        <div className="max-w-md w-full mx-auto my-auto py-8 sm:py-12">
+          <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#12161f] border border-slate-200 dark:border-[#262d3a] shadow-2xl space-y-6">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[#00c2b2] flex items-center justify-center mx-auto mb-3">
+              <div className="w-14 h-14 rounded-2xl bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[#00a396] dark:text-[#00c2b2] flex items-center justify-center mx-auto mb-3">
                 <Lock className="w-7 h-7" />
               </div>
-              <h1 className="text-2xl font-bold font-syne text-white tracking-tight">
+              <h1 className="text-2xl font-bold font-syne text-slate-900 dark:text-white tracking-tight">
                 Acceso al Panel Admin
               </h1>
-              <p className="text-xs font-mono text-zinc-400">
-                Ingresa tu clave administrativa para gestionar el catálogo de sistemas, perfil y base de datos NocoDB.
+              <p className="text-xs font-mono text-slate-500 dark:text-zinc-400">
+                Ingresa tu clave administrativa para gestionar el catálogo de sistemas, perfil y base de datos NocoDB desde tu PC o teléfono móvil.
               </p>
             </div>
 
             <form onSubmit={handleAdminPageLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-bold text-zinc-300 uppercase mb-1.5">
+                <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1.5">
                   Contraseña de Administrador
                 </label>
                 <div className="relative">
@@ -332,12 +387,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     onChange={(e) => setLoginInput(e.target.value)}
                     placeholder="Ingresa tu contraseña..."
                     autoFocus
-                    className="w-full pl-4 pr-11 py-3 rounded-xl bg-[#0b0e14] border border-[#2d3542] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                    className="w-full min-h-[46px] pl-4 pr-11 py-3 rounded-xl bg-slate-50 dark:bg-[#0b0e14] border border-slate-300 dark:border-[#2d3542] text-slate-900 dark:text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowLoginPass(!showLoginPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-white p-2 cursor-pointer"
                   >
                     {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -345,27 +400,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
 
               {loginError && (
-                <div className="p-3 rounded-xl bg-red-950/50 border border-red-800/60 text-xs font-mono text-red-300">
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/60 text-xs font-mono text-red-600 dark:text-red-300">
                   {loginError}
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full py-3 px-5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-lg transition-all cursor-pointer"
+                className="w-full min-h-[48px] py-3 px-5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-lg transition-all cursor-pointer"
               >
                 Ingresar al Centro de Control
               </button>
             </form>
 
-            <div className="pt-4 border-t border-[#262d3a] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+            <div className="pt-4 border-t border-slate-200 dark:border-[#262d3a] flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-zinc-500">
               <span>NocoDB Base: {nocoConfig.baseId}</span>
-              <span className="text-[#00c2b2]">● Cloud Ready</span>
+              <span className="text-emerald-600 dark:text-[#00c2b2] font-semibold">● Cloud Ready</span>
             </div>
           </div>
         </div>
 
-        <div className="max-w-7xl w-full mx-auto text-center text-xs font-mono text-zinc-500">
+        <div className="max-w-7xl w-full mx-auto text-center text-xs font-mono text-slate-400 dark:text-zinc-500">
           Educom-Tec — Soluciones Informáticas & Sistemas • Raúl Eduardo Rodríguez
         </div>
       </div>
@@ -384,6 +439,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     });
     setNewGalleryUrl('');
     setIsCreatingProduct(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStartCreateProduct = () => {
@@ -410,6 +466,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       year: new Date().getFullYear().toString(),
       demoUrl: '',
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDuplicateProduct = (prod: ProductOrProject) => {
@@ -834,16 +891,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  const navItems: { id: AdminTab; label: string; badge?: string | number; icon: React.ReactNode; group: string }[] = [
+  const navItems: { id: AdminTab; label: string; shortLabel: string; badge?: string | number; icon: React.ReactNode; group: string }[] = [
     {
       id: 'dashboard',
       label: 'Dashboard General',
+      shortLabel: 'Resumen',
       icon: <LayoutDashboard className="w-4 h-4" />,
       group: 'CENTRO DE CONTROL',
     },
     {
       id: 'products',
       label: 'Catálogo de Sistemas',
+      shortLabel: 'Sistemas',
       badge: draftProducts.length,
       icon: <Package className="w-4 h-4" />,
       group: 'CATÁLOGO COMERCIAL',
@@ -851,6 +910,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'categories',
       label: 'Categorías & Filtros',
+      shortLabel: 'Categorías',
       badge: draftCategories.length,
       icon: <Layers className="w-4 h-4" />,
       group: 'CATÁLOGO COMERCIAL',
@@ -858,12 +918,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'profile',
       label: 'Perfil, Foto & Hero',
+      shortLabel: 'Perfil',
       icon: <User className="w-4 h-4" />,
       group: 'MARCA & PORTAFOLIO',
     },
     {
       id: 'skills',
       label: 'Stack TI & Certificaciones',
+      shortLabel: 'Stack TI',
       badge: draftProfile.skills.length,
       icon: <Wrench className="w-4 h-4" />,
       group: 'MARCA & PORTAFOLIO',
@@ -871,6 +933,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'experience',
       label: 'Experiencia Laboral',
+      shortLabel: 'Experiencia',
       badge: draftProfile.experience.length,
       icon: <Briefcase className="w-4 h-4" />,
       group: 'MARCA & PORTAFOLIO',
@@ -878,6 +941,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'contact',
       label: 'Contacto, WhatsApp & Redes',
+      shortLabel: 'WhatsApp',
       badge: draftProfile.socials.length,
       icon: <Phone className="w-4 h-4" />,
       group: 'MARCA & PORTAFOLIO',
@@ -885,6 +949,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'security',
       label: 'Base de Datos NocoDB & Exportar',
+      shortLabel: 'NocoDB',
       icon: <Database className="w-4 h-4" />,
       group: 'SISTEMA & NUBE',
     },
@@ -892,66 +957,119 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const demosCount = draftProducts.filter((p) => Boolean(p.demoUrl && p.demoUrl.trim())).length;
 
+  // Shared Dual-Theme classes for inputs & cards inside Admin
+  const cardSurface = 'bg-white dark:bg-[#12161f] border border-slate-200/90 dark:border-[#1f2633] shadow-xs';
+  const subCardSurface = 'bg-slate-50 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a]';
+  const inputSurface =
+    'bg-slate-50 dark:bg-[#0b0e14] border border-slate-300 dark:border-[#262d3a] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#00c2b2]';
+  const btnSecondary =
+    'bg-slate-100 hover:bg-slate-200 dark:bg-[#161b26] dark:hover:bg-[#1f2633] border border-slate-200 dark:border-[#262d3a] text-slate-700 dark:text-zinc-200';
+
   return (
     <div
       className={
         isFullPage
-          ? 'min-h-screen w-full bg-[#0b0e14] text-zinc-100 flex flex-col'
-          : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn'
+          ? 'min-h-screen w-full bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-zinc-100 flex flex-col transition-colors duration-300'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn'
       }
     >
       <div
         className={
           isFullPage
-            ? 'flex-1 flex flex-col w-full min-h-screen bg-[#0b0e14] text-zinc-100'
-            : 'relative w-full max-w-7xl h-[96vh] flex flex-col rounded-3xl bg-[#0b0e14] border border-[#262d3a] shadow-2xl text-zinc-100 overflow-hidden'
+            ? 'flex-1 flex flex-col w-full min-h-screen bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-zinc-100 pb-16 lg:pb-0'
+            : 'relative w-full max-w-7xl h-full sm:h-[96vh] flex flex-col sm:rounded-3xl bg-slate-50 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a] shadow-2xl text-slate-900 dark:text-zinc-100 overflow-hidden'
         }
         onClick={(e) => e.stopPropagation()}
       >
         {/* ========================================================= */}
         {/* TOP COMMAND HEADER BAR */}
         {/* ========================================================= */}
-        <header className="sticky top-0 z-30 h-16 px-4 sm:px-6 border-b border-[#1f2633] bg-[#0f131c]/95 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="sticky top-0 z-30 h-15 sm:h-16 px-3 sm:px-6 border-b border-slate-200 dark:border-[#1f2633] bg-white/95 dark:bg-[#0f131c]/95 backdrop-blur-md flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-              className="lg:hidden p-2 rounded-xl bg-[#161b26] border border-[#262d3a] text-zinc-300 hover:text-white cursor-pointer"
+              className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#262d3a] text-slate-700 dark:text-zinc-300 cursor-pointer"
               aria-label="Menú del panel"
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-[#0b0e14] shadow-md shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-white shadow-md shrink-0">
               <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-bold font-syne text-white tracking-tight truncate">
-                  Educom-Tec Admin Workspace
+                <h1 className="text-xs sm:text-base font-bold font-syne text-slate-900 dark:text-white tracking-tight truncate">
+                  Educom-Tec Admin
                 </h1>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[10px] font-mono text-[#00c2b2] font-semibold">
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[10px] font-mono text-[#008f82] dark:text-[#00c2b2] font-semibold">
                   admin.html
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 font-mono hidden md:block truncate">
-                Centro de control profesional • NocoDB Cloud ({nocoConfig.baseId})
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono hidden md:block truncate">
+                Centro de control • NocoDB Cloud ({nocoConfig.baseId})
               </p>
             </div>
           </div>
 
-          {/* Right Quick Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right Quick Actions (Theme Switcher + Sync + View Site + Logout) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Desktop Segmented Theme Switcher (Claro / Oscuro) */}
+            <div className="hidden md:inline-flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#262d3a]">
+              <button
+                type="button"
+                onClick={() => handleSelectTheme(false)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  !isDark
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Activar Tema Claro"
+              >
+                <Sun className="w-3.5 h-3.5 text-[#ff7a00]" />
+                <span>Claro</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTheme(true)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isDark
+                    ? 'bg-[#2563eb] text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Activar Tema Oscuro"
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span>Oscuro</span>
+              </button>
+            </div>
+
+            {/* Mobile Quick Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={() => handleSelectTheme(!isDark)}
+              className="md:hidden min-w-[38px] min-h-[38px] px-2.5 rounded-xl bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#262d3a] flex items-center justify-center gap-1 text-slate-700 dark:text-zinc-200 text-xs font-semibold cursor-pointer"
+              title={isDark ? 'Cambiar a Tema Claro' : 'Cambiar a Tema Oscuro'}
+            >
+              {isDark ? (
+                <Sun className="w-4 h-4 text-[#ff7a00]" />
+              ) : (
+                <Moon className="w-4 h-4 text-[#2563eb]" />
+              )}
+              <span className="hidden xs:inline text-[11px]">{isDark ? 'Claro' : 'Oscuro'}</span>
+            </button>
+
             <button
               type="button"
               disabled={isSyncingNoco}
               onClick={handleManualNocoSync}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1e2534] border border-[#00c2b2]/40 text-[#00c2b2] text-xs font-mono font-semibold transition-colors cursor-pointer disabled:opacity-50"
-              title="Sincronizar catálogo, categorías y perfil con NocoDB Cloud"
+              className="min-h-[38px] inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#161b26] hover:bg-slate-200 dark:hover:bg-[#1e2534] border border-[#00c2b2]/40 text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              title="Sincronizar con NocoDB Cloud"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNoco ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">
+              <span className="hidden xl:inline">
                 {isSyncingNoco ? 'Sincronizando...' : 'Sincronizar NocoDB'}
               </span>
             </button>
@@ -963,40 +1081,80 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 try {
                   showToast('Generando index.html portátil...');
                   await downloadStandaloneHtml('index.html');
-                  showToast('¡index.html descargado! Listo para Cloudflare Pages o PC.');
+                  showToast('¡index.html descargado!');
                 } catch {
                   showToast('Error al generar archivo index.html.');
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
               title="Descargar index.html autónomo"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Descargar Web</span>
+              <span className="hidden lg:inline">Descargar Web</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold transition-colors cursor-pointer"
+              className="min-h-[38px] inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs font-mono font-bold transition-colors cursor-pointer"
               title="Volver a la página pública principal (index.html)"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Ver Web Pública</span>
+              <span className="hidden sm:inline">Ver Web Pública</span>
+              <span className="sm:hidden">Web</span>
             </button>
 
             <button
               id="admin-logout-btn"
               type="button"
               onClick={onLogout}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161b26] hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-[#262d3a] hover:border-red-800/60 text-xs font-mono transition-colors cursor-pointer"
+              className="min-h-[38px] inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#161b26] hover:bg-red-50 dark:hover:bg-red-950/60 text-slate-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-300 border border-slate-200 dark:border-[#262d3a] text-xs font-mono transition-colors cursor-pointer"
               title="Cerrar sesión de administrador"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Salir</span>
+              <span className="hidden xl:inline">Salir</span>
             </button>
           </div>
         </header>
+
+        {/* ========================================================= */}
+        {/* MOBILE SWIPEABLE QUICK-TAB STRIP (Visible on Smartphones/Tablets) */}
+        {/* ========================================================= */}
+        <div className="lg:hidden sticky top-15 z-20 flex items-center gap-1.5 overflow-x-auto no-scrollbar px-3 py-2 bg-white/95 dark:bg-[#0f131c]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#1f2633] shrink-0">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(item.id);
+                  if (item.id !== 'products') setEditingProductId(null);
+                  setMobileSidebarOpen(false);
+                }}
+                className={`min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                  isActive
+                    ? 'bg-[#00c2b2] text-[#0b0e14] font-bold shadow-xs'
+                    : 'bg-slate-100 dark:bg-[#161b26] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#262d3a]'
+                }`}
+              >
+                {item.icon}
+                <span>{item.shortLabel}</span>
+                {item.badge !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                      isActive
+                        ? 'bg-[#0b0e14]/20 text-[#0b0e14]'
+                        : 'bg-white dark:bg-[#0b0e14] text-slate-500 dark:text-zinc-400'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Toast Alert Banner */}
         {toastMessage && (
@@ -1019,34 +1177,77 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         {/* MAIN WORKSPACE BODY (SIDEBAR + CONTENT AREA) */}
         {/* ========================================================= */}
         <div className="flex-1 flex min-h-0 relative">
+          {/* Mobile Backdrop Overlay */}
+          {mobileSidebarOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+          )}
+
           {/* Left Navigation Sidebar */}
           <aside
             className={`${
-              mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden lg:flex'
-            } w-68 flex-col border-r border-[#1f2633] bg-[#0f131c] shrink-0 select-none`}
+              mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-50 flex w-72 shadow-2xl' : 'hidden lg:flex w-68'
+            } flex-col border-r border-slate-200 dark:border-[#1f2633] bg-white dark:bg-[#0f131c] shrink-0 select-none transition-colors`}
           >
             {mobileSidebarOpen && (
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f2633] lg:hidden">
-                <span className="text-xs font-mono font-bold text-[#00c2b2] uppercase">
-                  Navegación Admin
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-200 dark:border-[#1f2633] lg:hidden">
+                <span className="text-xs font-mono font-bold text-[#008f82] dark:text-[#00c2b2] uppercase">
+                  Menú del Panel Admin
                 </span>
                 <button
                   type="button"
                   onClick={() => setMobileSidebarOpen(false)}
-                  className="p-1 text-zinc-400 hover:text-white"
+                  className="p-2 rounded-lg text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto py-5 px-3.5 space-y-6">
+            {/* Mobile Theme Selector inside Drawer */}
+            <div className="px-3.5 pt-4 lg:hidden">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#161b26] border border-slate-200 dark:border-[#262d3a]">
+                <span className="text-[10px] font-mono font-bold uppercase text-slate-500 dark:text-zinc-400 block mb-2">
+                  Tema de Apariencia
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTheme(false)}
+                    className={`min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                      !isDark
+                        ? 'bg-white text-slate-900 border-[#2563eb] shadow-xs'
+                        : 'bg-slate-100 dark:bg-[#0b0e14] text-slate-500 dark:text-zinc-400 border-transparent'
+                    }`}
+                  >
+                    <Sun className="w-3.5 h-3.5 text-[#ff7a00]" />
+                    <span>Claro</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTheme(true)}
+                    className={`min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                      isDark
+                        ? 'bg-[#2563eb] text-white border-[#2563eb] shadow-xs'
+                        : 'bg-slate-100 text-slate-600 border-transparent'
+                    }`}
+                  >
+                    <Moon className="w-3.5 h-3.5" />
+                    <span>Oscuro</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 px-3.5 space-y-5">
               {['CENTRO DE CONTROL', 'CATÁLOGO COMERCIAL', 'MARCA & PORTAFOLIO', 'SISTEMA & NUBE'].map(
                 (groupName) => {
                   const groupItems = navItems.filter((item) => item.group === groupName);
                   return (
                     <div key={groupName} className="space-y-1.5">
-                      <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
+                      <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block">
                         {groupName}
                       </span>
                       {groupItems.map((item) => {
@@ -1060,10 +1261,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               if (item.id !== 'products') setEditingProductId(null);
                               setMobileSidebarOpen(false);
                             }}
-                            className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+                            className={`w-full min-h-[42px] flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
                               isActive
                                 ? 'bg-[#00c2b2] text-[#0b0e14] font-bold shadow-md'
-                                : 'text-zinc-300 hover:text-white hover:bg-[#161b26]'
+                                : 'text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#161b26]'
                             }`}
                           >
                             <div className="flex items-center gap-2.5 truncate">
@@ -1075,7 +1276,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tabular-nums ${
                                   isActive
                                     ? 'bg-[#0b0e14]/20 text-[#0b0e14]'
-                                    : 'bg-[#161b26] text-zinc-400 border border-[#262d3a]'
+                                    : 'bg-slate-100 dark:bg-[#161b26] text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-[#262d3a]'
                                 }`}
                               >
                                 {item.badge}
@@ -1091,46 +1292,46 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
 
             {/* Sidebar Bottom Quick CTA */}
-            <div className="p-4 border-t border-[#1f2633] bg-[#0b0e14]/60 space-y-2.5">
+            <div className="p-4 border-t border-slate-200 dark:border-[#1f2633] bg-slate-50 dark:bg-[#0b0e14]/60 space-y-2.5">
               <button
                 type="button"
                 onClick={() => {
                   handleStartCreateProduct();
                   setMobileSidebarOpen(false);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs transition-all cursor-pointer shadow-sm"
+                className="w-full min-h-[42px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs transition-all cursor-pointer shadow-sm"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Nuevo Sistema</span>
               </button>
 
-              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 px-1">
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-zinc-500 px-1">
                 <span>NocoDB Cloud</span>
-                <span className="text-[#00c2b2] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00c2b2]" /> Conectado
+                <span className="text-emerald-600 dark:text-[#00c2b2] flex items-center gap-1 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-[#00c2b2]" /> Conectado
                 </span>
               </div>
             </div>
           </aside>
 
           {/* Main Scrollable Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#0b0e14]">
-            <div className="max-w-6xl mx-auto space-y-8">
+          <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0b0e14] transition-colors">
+            <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
               {/* ========================================================= */}
               {/* TAB 0: DASHBOARD GENERAL (EXECUTIVE OVERVIEW) */}
               {/* ========================================================= */}
               {activeTab === 'dashboard' && (
-                <div className="space-y-8 animate-fadeIn">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#1f2633]">
+                <div className="space-y-6 sm:space-y-8 animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-[#1f2633]">
                     <div>
-                      <span className="text-xs font-mono uppercase tracking-wider text-[#00c2b2] font-bold block">
+                      <span className="text-xs font-mono uppercase tracking-wider text-[#008f82] dark:text-[#00c2b2] font-bold block">
                         RESUMEN EJECUTIVO • ADMIN.HTML
                       </span>
-                      <h2 className="text-2xl sm:text-3xl font-bold font-syne text-white mt-0.5">
+                      <h2 className="text-xl sm:text-3xl font-bold font-syne text-slate-900 dark:text-white mt-0.5">
                         Bienvenido, {draftProfile.name.split(' ')[0] || 'Raúl'}
                       </h2>
-                      <p className="text-xs text-zinc-400 font-mono mt-1">
-                        Gestiona todos los sistemas del catálogo, enlaces de demostración, perfil profesional y respaldos en NocoDB Cloud desde esta página independiente.
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-1">
+                        Gestiona todos los sistemas del catálogo, enlaces de demostración, perfil profesional y respaldos en NocoDB Cloud desde tu PC o smartphone.
                       </p>
                     </div>
 
@@ -1138,7 +1339,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <button
                         type="button"
                         onClick={handleStartCreateProduct}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                        className="min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
                       >
                         <Plus className="w-4 h-4 stroke-[2.5]" />
                         <span>+ Agregar Sistema</span>
@@ -1150,84 +1351,84 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           await downloadStandaloneAdminHtml();
                           showToast('¡admin.html descargado exitosamente!');
                         }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                        className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}
                       >
-                        <Download className="w-3.5 h-3.5 text-[#00c2b2]" />
+                        <Download className="w-3.5 h-3.5 text-[#008f82] dark:text-[#00c2b2]" />
                         <span>Descargar admin.html</span>
                       </button>
                     </div>
                   </div>
 
                   {/* KPI Metric Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-                        <span>SISTEMAS EN CATÁLOGO</span>
-                        <Package className="w-4 h-4 text-[#00c2b2]" />
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between ${cardSurface}`}>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-[11px] sm:text-xs font-mono">
+                        <span>SISTEMAS</span>
+                        <Package className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                       </div>
-                      <div className="mt-3 flex items-baseline justify-between">
-                        <span className="text-3xl font-bold font-syne text-white tabular-nums">
+                      <div className="mt-3 flex items-baseline justify-between gap-1">
+                        <span className="text-2xl sm:text-3xl font-bold font-syne text-slate-900 dark:text-white tabular-nums">
                           {draftProducts.length}
                         </span>
                         <button
                           type="button"
                           onClick={() => setActiveTab('products')}
-                          className="text-[11px] font-mono text-[#00c2b2] hover:underline cursor-pointer"
+                          className="text-[11px] font-mono text-[#008f82] dark:text-[#00c2b2] hover:underline cursor-pointer"
                         >
                           Gestionar &rarr;
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-                        <span>CON BOTÓN "VER DEMO"</span>
-                        <ExternalLink className="w-4 h-4 text-emerald-400" />
+                    <div className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between ${cardSurface}`}>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-[11px] sm:text-xs font-mono">
+                        <span>CON DEMO</span>
+                        <ExternalLink className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                       </div>
-                      <div className="mt-3 flex items-baseline justify-between">
-                        <span className="text-3xl font-bold font-syne text-emerald-400 tabular-nums">
+                      <div className="mt-3 flex items-baseline justify-between gap-1">
+                        <span className="text-2xl sm:text-3xl font-bold font-syne text-emerald-600 dark:text-emerald-400 tabular-nums">
                           {demosCount}
                         </span>
-                        <span className="text-[11px] font-mono text-zinc-400">
-                          de {draftProducts.length} sistemas
+                        <span className="text-[10px] sm:text-[11px] font-mono text-slate-400 dark:text-zinc-400">
+                          de {draftProducts.length}
                         </span>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-                        <span>CATEGORÍAS ACTIVAS</span>
-                        <Layers className="w-4 h-4 text-sky-400" />
+                    <div className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between ${cardSurface}`}>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-[11px] sm:text-xs font-mono">
+                        <span>CATEGORÍAS</span>
+                        <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400" />
                       </div>
-                      <div className="mt-3 flex items-baseline justify-between">
-                        <span className="text-3xl font-bold font-syne text-white tabular-nums">
+                      <div className="mt-3 flex items-baseline justify-between gap-1">
+                        <span className="text-2xl sm:text-3xl font-bold font-syne text-slate-900 dark:text-white tabular-nums">
                           {draftCategories.length}
                         </span>
                         <button
                           type="button"
                           onClick={() => setActiveTab('categories')}
-                          className="text-[11px] font-mono text-sky-400 hover:underline cursor-pointer"
+                          className="text-[11px] font-mono text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
                         >
-                          Editar filtros &rarr;
+                          Filtros &rarr;
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#00c2b2]/30 flex flex-col justify-between">
-                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-                        <span>BASE DE DATOS NOCODB</span>
-                        <Database className="w-4 h-4 text-[#00c2b2]" />
+                    <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#12161f] border border-[#00c2b2]/40 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-[11px] sm:text-xs font-mono">
+                        <span>NOCODB CLOUD</span>
+                        <Database className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                       </div>
-                      <div className="mt-3 flex items-baseline justify-between">
-                        <span className="text-base font-bold font-mono text-[#00c2b2] truncate">
+                      <div className="mt-3 flex items-baseline justify-between gap-1">
+                        <span className="text-xs sm:text-base font-bold font-mono text-[#008f82] dark:text-[#00c2b2] truncate">
                           {nocoConfig.baseId}
                         </span>
                         <button
                           type="button"
                           onClick={() => setActiveTab('security')}
-                          className="text-[11px] font-mono text-zinc-300 hover:text-white underline cursor-pointer"
+                          className="text-[11px] font-mono text-slate-600 dark:text-zinc-300 underline cursor-pointer shrink-0"
                         >
-                          Configurar
+                          Ajustes
                         </button>
                       </div>
                     </div>
@@ -1235,68 +1436,68 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                   {/* Quick Management Modules Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
-                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
-                        <Download className="w-4 h-4 text-[#00c2b2]" />
+                    <div className={`p-5 rounded-2xl space-y-3 ${cardSurface}`}>
+                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
+                        <Download className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                         <span>Exportar Archivos HTML Portátiles</span>
                       </h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        Descarga tanto la página pública (<code className="text-zinc-200">index.html</code>) como este panel administrativo independiente (<code className="text-zinc-200">admin.html</code>) listos para Cloudflare Pages, GitHub Pages o PC.
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
+                        Descarga tanto la página pública (<code className="font-mono text-slate-800 dark:text-zinc-200">index.html</code>) como este panel administrativo independiente (<code className="font-mono text-slate-800 dark:text-zinc-200">admin.html</code>).
                       </p>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           type="button"
                           onClick={() => downloadStandaloneHtml('index.html')}
-                          className="px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
+                          className="min-h-[38px] px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
                         >
                           Descargar index.html
                         </button>
                         <button
                           type="button"
                           onClick={() => downloadStandaloneAdminHtml()}
-                          className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-[#00c2b2] text-xs font-mono font-bold cursor-pointer"
+                          className={`min-h-[38px] px-3 py-2 rounded-xl text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-bold cursor-pointer ${btnSecondary}`}
                         >
                           Descargar admin.html
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
-                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                    <div className={`p-5 rounded-2xl space-y-3 ${cardSurface}`}>
+                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
                         <MessageCircle className="w-4 h-4 text-[#25D366]" />
                         <span>WhatsApp & Contacto Directo</span>
                       </h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        Número activo: <strong className="text-white font-mono">{whatsappPhone || 'Sin configurar'}</strong>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
+                        Número activo: <strong className="text-slate-900 dark:text-white font-mono">{whatsappPhone || 'Sin configurar'}</strong>
                         <br />
-                        Correo: <strong className="text-white font-mono">{draftProfile.email}</strong>
+                        Correo: <strong className="text-slate-900 dark:text-white font-mono">{draftProfile.email}</strong>
                       </p>
                       <button
                         type="button"
                         onClick={() => setActiveTab('contact')}
-                        className="px-3.5 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                        className={`min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}
                       >
                         Editar WhatsApp y Redes &rarr;
                       </button>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
-                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
-                        <FileJson className="w-4 h-4 text-amber-400" />
+                    <div className={`p-5 rounded-2xl space-y-3 ${cardSurface}`}>
+                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
+                        <FileJson className="w-4 h-4 text-amber-500" />
                         <span>Respaldo Total en JSON</span>
                       </h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        Guarda una copia de seguridad local de todos tus sistemas, fotos y biografía en un archivo JSON o restaura una copia previa.
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
+                        Guarda una copia de seguridad local de todos tus sistemas, fotos y biografía en JSON o restaura una copia previa.
                       </p>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           type="button"
                           onClick={handleExportJsonBackup}
-                          className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                          className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}
                         >
                           Exportar JSON
                         </button>
-                        <label className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-amber-300 text-xs font-mono font-semibold cursor-pointer">
+                        <label className={`min-h-[38px] inline-flex items-center px-3 py-2 rounded-xl text-amber-600 dark:text-amber-300 text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}>
                           <span>Importar JSON</span>
                           <input
                             type="file"
@@ -1314,82 +1515,84 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
 
                   {/* Quick Table of Systems */}
-                  <div className="rounded-2xl bg-[#12161f] border border-[#1f2633] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-[#1f2633] flex flex-wrap items-center justify-between gap-3">
+                  <div className={`rounded-2xl overflow-hidden ${cardSurface}`}>
+                    <div className="px-4 sm:px-5 py-4 border-b border-slate-200 dark:border-[#1f2633] flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-bold font-syne text-white">
+                        <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white">
                           Vista Rápida de Sistemas en Catálogo
                         </h3>
-                        <p className="text-xs text-zinc-400 font-mono">
-                          Haz clic en "Editar" en cualquier sistema para modificar su enlace "Ver Demo", fotos o precios.
+                        <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
+                          Toca "Editar" en cualquier sistema para modificar su enlace "Ver Demo", fotos o precios.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setActiveTab('products')}
-                        className="text-xs font-mono text-[#00c2b2] hover:underline cursor-pointer"
+                        className="text-xs font-mono font-bold text-[#008f82] dark:text-[#00c2b2] hover:underline cursor-pointer"
                       >
                         Ver editor completo &rarr;
                       </button>
                     </div>
 
-                    <div className="divide-y divide-[#1f2633]">
+                    <div className="divide-y divide-slate-200 dark:divide-[#1f2633]">
                       {draftProducts.map((prod, idx) => (
                         <div
                           key={prod.id}
-                          className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#161b26]/60 transition-colors"
+                          className="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-[#161b26]/60 transition-colors"
                         >
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            <span className="text-xs font-mono text-zinc-500 w-5 tabular-nums">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="text-xs font-mono text-slate-400 dark:text-zinc-500 w-5 tabular-nums shrink-0">
                               #{idx + 1}
                             </span>
                             <img
                               src={prod.imageUrl}
                               alt={prod.title}
-                              className="w-11 h-11 rounded-xl object-cover border border-[#262d3a] shrink-0"
+                              className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-[#262d3a] shrink-0"
                             />
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-syne font-bold text-white text-sm truncate">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-syne font-bold text-slate-900 dark:text-white text-sm truncate">
                                   {prod.title}
                                 </span>
-                                <span className="px-2 py-0.5 rounded-md bg-[#0b0e14] border border-[#262d3a] text-[10px] font-mono text-[#00c2b2]">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a] text-[10px] font-mono text-[#008f82] dark:text-[#00c2b2]">
                                   {prod.categoryLabel}
                                 </span>
                                 {prod.demoUrl ? (
-                                  <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-mono text-emerald-300">
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-700/50 text-[10px] font-mono text-emerald-700 dark:text-emerald-300">
                                     ● Demo Activa
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-[10px] font-mono text-slate-400 dark:text-zinc-500">
                                     Sin Demo
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-zinc-400 truncate mt-0.5">{prod.subtitle}</p>
+                              <p className="text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5">{prod.subtitle}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                            <span className="text-xs font-mono font-bold text-amber-400 mr-2 tabular-nums">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-[#1f2633] shrink-0">
+                            <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 mr-2 tabular-nums">
                               {prod.price}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditProduct(prod)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-xs font-mono text-zinc-200 cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-[#00c2b2]" />
-                              <span>Editar</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicateProduct(prod)}
-                              className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-400 hover:text-white cursor-pointer"
-                              title="Duplicar sistema"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditProduct(prod)}
+                                className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono cursor-pointer ${btnSecondary}`}
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-[#008f82] dark:text-[#00c2b2]" />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateProduct(prod)}
+                                className={`min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg cursor-pointer ${btnSecondary}`}
+                                title="Duplicar sistema"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1404,13 +1607,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {activeTab === 'products' && (
                 <div className="space-y-6 animate-fadeIn">
                   {editingProductId ? (
-                    <div className="p-6 sm:p-7 rounded-2xl bg-[#12161f] border border-[#262d3a] space-y-6">
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#1f2633]">
+                    <div className={`p-4 sm:p-7 rounded-2xl space-y-6 ${cardSurface}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-[#1f2633]">
                         <div>
-                          <span className="text-[11px] font-mono uppercase text-[#00c2b2] font-semibold">
+                          <span className="text-[11px] font-mono uppercase text-[#008f82] dark:text-[#00c2b2] font-semibold">
                             {isCreatingProduct ? 'CREAR NUEVO SISTEMA / PRODUCTO' : 'EDITANDO SISTEMA DEL CATÁLOGO'}
                           </span>
-                          <h3 className="text-xl font-bold font-syne text-white">
+                          <h3 className="text-lg sm:text-xl font-bold font-syne text-slate-900 dark:text-white">
                             {productForm.title || 'Sistema sin título'}
                           </h3>
                         </div>
@@ -1418,14 +1621,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setEditingProductId(null)}
-                            className="px-4 py-2 rounded-xl text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-300 cursor-pointer"
+                            className={`min-h-[42px] flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-mono cursor-pointer ${btnSecondary}`}
                           >
-                            &larr; Volver al Listado
+                            &larr; Volver
                           </button>
                           <button
                             type="button"
                             onClick={handleSaveProductForm}
-                            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                            className="min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
                           >
                             <Save className="w-4 h-4" />
                             <span>Guardar Sistema</span>
@@ -1433,9 +1636,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Título del Sistema / Servicio *
                           </label>
                           <input
@@ -1444,12 +1647,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={productForm.title || ''}
                             onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
                             placeholder="Ej. Educom ERP & Control de Stock"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Subtítulo o Resumen Técnico
                           </label>
                           <input
@@ -1457,18 +1660,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={productForm.subtitle || ''}
                             onChange={(e) => setProductForm({ ...productForm, subtitle: e.target.value })}
                             placeholder="Ej. Gestión de almacén, compras y facturación POS"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Categoría
                           </label>
                           <select
                             value={productForm.category || 'systems'}
                             onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm cursor-pointer ${inputSurface}`}
                           >
                             {draftCategories
                               .filter((c) => c.id !== 'all')
@@ -1481,7 +1684,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Precio / Modalidad de Cotización
                           </label>
                           <input
@@ -1489,18 +1692,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={productForm.price || ''}
                             onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
                             placeholder="Ej. Consultar Cotización / $150"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Estado
                           </label>
                           <select
                             value={productForm.status || 'Disponible'}
                             onChange={(e) => setProductForm({ ...productForm, status: e.target.value as any })}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm cursor-pointer ${inputSurface}`}
                           >
                             <option value="Disponible">Disponible</option>
                             <option value="Implementación Inmediata">Implementación Inmediata</option>
@@ -1511,7 +1714,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Año de Lanzamiento / Versión
                           </label>
                           <input
@@ -1519,35 +1722,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={productForm.year || new Date().getFullYear().toString()}
                             onChange={(e) => setProductForm({ ...productForm, year: e.target.value })}
                             placeholder="2026"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
                       </div>
 
                       {/* BOTÓN "VER DEMO" */}
-                      <div className="p-5 rounded-2xl bg-[#0b0e14] border border-[#00c2b2]/40 space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#1f2633]">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-xl bg-[#00c2b2]/15 text-[#00c2b2] border border-[#00c2b2]/30">
+                      <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-[#0b0e14] border border-[#00c2b2]/40 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-[#1f2633]">
+                          <div className="flex items-start sm:items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-[#00c2b2]/15 text-[#008f82] dark:text-[#00c2b2] border border-[#00c2b2]/30 shrink-0">
                               <ExternalLink className="w-4 h-4" />
                             </div>
                             <div>
-                              <h4 className="text-xs sm:text-sm font-bold font-syne text-white flex items-center gap-2">
+                              <h4 className="text-xs sm:text-sm font-bold font-syne text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
                                 <span>Configuración del Botón "Ver Demo"</span>
-                                <span className="px-2 py-0.5 rounded-full bg-[#00c2b2]/15 text-[#00c2b2] text-[10px] font-mono">
+                                <span className="px-2 py-0.5 rounded-full bg-[#00c2b2]/15 text-[#008f82] dark:text-[#00c2b2] text-[10px] font-mono">
                                   URL o Captura
                                 </span>
                               </h4>
-                              <p className="text-[11px] text-zinc-400 font-mono">
-                                Coloca la dirección web (URL) de tu demo en vivo, video o sube una captura desde tu dispositivo.
+                              <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
+                                Coloca la dirección web (URL) de tu demo en vivo o sube una captura desde tu teléfono o PC.
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
                             <label
                               htmlFor="demo-file-upload"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#00c2b2]/40 transition-colors"
+                              className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-[#161b26] hover:bg-slate-100 dark:hover:bg-[#1f2633] text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#00c2b2]/40 transition-colors"
                             >
                               <Upload className="w-3.5 h-3.5" />
                               <span>Subir Captura Demo</span>
@@ -1585,7 +1788,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   setProductForm({ ...productForm, demoUrl: '' });
                                   showToast('Enlace de Demo eliminado.');
                                 }}
-                                className="px-2.5 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 text-xs font-mono transition-colors cursor-pointer"
+                                className="min-h-[40px] px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800/50 text-xs font-mono transition-colors cursor-pointer"
                               >
                                 Quitar Demo
                               </button>
@@ -1594,7 +1797,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Dirección Web (URL) para el Botón "Ver Demo"
                           </label>
                           <div className="flex flex-col sm:flex-row gap-2">
@@ -1607,8 +1810,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               }
                               readOnly={Boolean(productForm.demoUrl?.startsWith('data:image/'))}
                               onChange={(e) => setProductForm({ ...productForm, demoUrl: e.target.value })}
-                              placeholder="Ej: https://mi-sistema-demo.com, YouTube, Drive o deja vacío para ocultar"
-                              className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#12161f] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                              placeholder="Ej: https://mi-sistema-demo.com, YouTube, Drive o deja vacío"
+                              className={`flex-1 min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                             />
                             {productForm.demoUrl && !productForm.demoUrl.startsWith('data:') && (
                               <a
@@ -1619,7 +1822,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 }
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00c2b2]/20 hover:bg-[#00c2b2]/30 text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-bold transition-colors shrink-0"
+                                className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00c2b2]/20 hover:bg-[#00c2b2]/30 text-[#008f82] dark:text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-bold transition-colors shrink-0"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                                 <span>Probar URL</span>
@@ -1630,19 +1833,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </div>
 
                       {/* IMAGEN DE PORTADA Y GALERÍA */}
-                      <div className="p-5 rounded-2xl bg-[#0b0e14] border border-[#262d3a] space-y-5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1f2633]">
+                      <div className={`p-4 sm:p-5 rounded-2xl space-y-5 ${subCardSurface}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-[#1f2633]">
                           <div>
-                            <h4 className="text-xs sm:text-sm font-bold font-syne text-white uppercase tracking-wider">
+                            <h4 className="text-xs sm:text-sm font-bold font-syne text-slate-900 dark:text-white uppercase tracking-wider">
                               Imagen de Portada & Galería de Capturas
                             </h4>
-                            <p className="text-[11px] text-zinc-400 font-mono">
-                              Sube imágenes desde tu dispositivo o pega enlaces directos.
+                            <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
+                              Sube imágenes desde la galería de tu teléfono o PC, o pega enlaces directos.
                             </p>
                           </div>
                           <label
                             htmlFor="product-cover-upload"
-                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] text-xs font-syne font-bold uppercase tracking-wider cursor-pointer transition-all shrink-0 shadow-sm"
+                            className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] text-xs font-syne font-bold uppercase tracking-wider cursor-pointer transition-all shrink-0 shadow-sm"
                           >
                             <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
                             <span>Subir Portada</span>
@@ -1675,7 +1878,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                          <div className="w-full sm:w-40 h-26 rounded-xl overflow-hidden border border-[#262d3a] bg-[#12161f] shrink-0">
+                          <div className="w-full sm:w-40 h-32 sm:h-26 rounded-xl overflow-hidden border border-slate-200 dark:border-[#262d3a] bg-white dark:bg-[#12161f] shrink-0">
                             <img
                               src={
                                 productForm.imageUrl ||
@@ -1686,7 +1889,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             />
                           </div>
                           <div className="flex-1 w-full space-y-1.5">
-                            <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
+                            <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 uppercase">
                               URL de Imagen de Portada
                             </label>
                             <input
@@ -1699,20 +1902,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               readOnly={Boolean(productForm.imageUrl?.startsWith('data:image/'))}
                               onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
                               placeholder="https://images.unsplash.com/..."
-                              className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-xs"
+                              className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl font-mono text-xs ${inputSurface}`}
                             />
                           </div>
                         </div>
 
                         {/* Galería */}
-                        <div className="pt-3 border-t border-[#1f2633] space-y-3">
+                        <div className="pt-3 border-t border-slate-200 dark:border-[#1f2633] space-y-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <span className="text-xs font-mono font-bold text-zinc-200 uppercase">
+                            <span className="text-xs font-mono font-bold text-slate-800 dark:text-zinc-200 uppercase">
                               Galería de Capturas ({(productForm.gallery || []).length})
                             </span>
                             <label
                               htmlFor="product-gallery-upload"
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-semibold cursor-pointer transition-colors shrink-0"
+                              className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#161b26] hover:bg-slate-100 dark:hover:bg-[#1f2633] text-[#008f82] dark:text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-semibold cursor-pointer transition-colors shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               <span>+ Subir Capturas desde Dispositivo</span>
@@ -1747,13 +1950,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             />
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <input
                               type="text"
                               value={newGalleryUrl}
                               onChange={(e) => setNewGalleryUrl(e.target.value)}
                               placeholder="O pega aquí la URL de otra captura (https://...)"
-                              className="flex-1 px-3 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                              className={`flex-1 min-h-[42px] px-3 py-2 rounded-xl font-mono text-xs ${inputSurface}`}
                             />
                             <button
                               type="button"
@@ -1766,7 +1969,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 setNewGalleryUrl('');
                                 showToast('Captura añadida.');
                               }}
-                              className="px-3.5 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-zinc-200 text-xs font-mono font-bold border border-[#262d3a] cursor-pointer shrink-0"
+                              className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-mono font-bold cursor-pointer shrink-0 ${btnSecondary}`}
                             >
                               + Añadir URL
                             </button>
@@ -1777,10 +1980,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               {productForm.gallery.map((img, idx) => (
                                 <div
                                   key={idx}
-                                  className="relative group aspect-video rounded-xl overflow-hidden border border-[#262d3a] bg-[#12161f]"
+                                  className="relative group aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-[#262d3a] bg-white dark:bg-[#12161f]"
                                 >
                                   <img src={img} alt={`Captura ${idx + 1}`} className="w-full h-full object-cover" />
-                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
+                                  <div className="absolute inset-x-0 bottom-0 sm:inset-0 bg-black/70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1.5">
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1811,7 +2014,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Descripción Principal (Tarjeta) *
                           </label>
                           <textarea
@@ -1819,26 +2022,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             required
                             value={productForm.description || ''}
                             onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Descripción Detallada (Modal Completo)
                           </label>
                           <textarea
                             rows={3}
                             value={productForm.longDescription || ''}
                             onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Tecnologías (separadas por coma)
                           </label>
                           <input
@@ -1850,12 +2053,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 technologies: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
                               })
                             }
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Tags / Etiquetas (separadas por coma)
                           </label>
                           <input
@@ -1867,14 +2070,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
                               })
                             }
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Características Principales (una por línea)
                           </label>
                           <textarea
@@ -1886,12 +2089,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 features: e.target.value.split('\n').filter((f) => f.trim().length > 0),
                               })
                             }
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                             Entregables Incluidos (uno por línea)
                           </label>
                           <textarea
@@ -1904,23 +2107,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               })
                             }
                             placeholder="Instalación y despliegue&#10;Capacitación al personal&#10;Garantía técnica"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                           />
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#1f2633]">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-[#1f2633]">
                         <button
                           type="button"
                           onClick={() => setEditingProductId(null)}
-                          className="px-5 py-2.5 rounded-xl text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] text-zinc-300 cursor-pointer"
+                          className={`min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           Cancelar
                         </button>
                         <button
                           type="button"
                           onClick={handleSaveProductForm}
-                          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                          className="min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
                         >
                           <Save className="w-4 h-4" />
                           <span>Guardar y Sincronizar Sistema</span>
@@ -1931,17 +2134,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                          <h2 className="text-xl font-bold font-syne text-white">
+                          <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                             Catálogo de Sistemas & Productos ({draftProducts.length})
                           </h2>
-                          <p className="text-xs text-zinc-400 font-mono">
+                          <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                             Busca, filtra, reordena, duplica o edita cualquier sistema del catálogo comercial.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={handleStartCreateProduct}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer shrink-0"
+                          className="min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer shrink-0"
                         >
                           <Plus className="w-4 h-4 stroke-[2.5]" />
                           <span>+ Crear Nuevo Sistema</span>
@@ -1949,21 +2152,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </div>
 
                       {/* Search & Category Filter Bar */}
-                      <div className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div className={`p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${cardSurface}`}>
                         <div className="relative flex-1">
-                          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           <input
                             type="text"
                             value={adminSearch}
                             onChange={(e) => setAdminSearch(e.target.value)}
                             placeholder="Buscar sistema por título, descripción o etiqueta..."
-                            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                            className={`w-full min-h-[42px] pl-10 pr-4 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                         <select
                           value={adminCatFilter}
                           onChange={(e) => setAdminCatFilter(e.target.value)}
-                          className="px-3.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-200 focus:outline-hidden focus:border-[#00c2b2] cursor-pointer"
+                          className={`min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-mono cursor-pointer ${inputSurface}`}
                         >
                           {draftCategories.map((c) => (
                             <option key={c.id} value={c.id}>
@@ -1979,44 +2182,44 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           return (
                             <div
                               key={prod.id}
-                              className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between hover:border-[#00c2b2]/40 transition-colors"
+                              className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between hover:border-[#00c2b2]/50 transition-colors ${cardSurface}`}
                             >
-                              <div className="flex items-start gap-4 mb-4">
+                              <div className="flex items-start gap-3.5 sm:gap-4 mb-4">
                                 <img
                                   src={prod.imageUrl}
                                   alt={prod.title}
-                                  className="w-20 h-20 rounded-xl object-cover shrink-0 border border-[#262d3a]"
+                                  className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-[#262d3a]"
                                 />
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                                    <span className="px-2 py-0.5 rounded-md bg-[#0b0e14] border border-[#262d3a] text-[10px] font-mono text-[#00c2b2]">
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a] text-[10px] font-mono text-[#008f82] dark:text-[#00c2b2]">
                                       {prod.categoryLabel || prod.category}
                                     </span>
-                                    <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[10px] font-mono text-zinc-300">
+                                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-[10px] font-mono text-slate-600 dark:text-zinc-300">
                                       {prod.status}
                                     </span>
                                     {prod.demoUrl ? (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-mono text-emerald-300">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-700/50 text-[10px] font-mono text-emerald-700 dark:text-emerald-300">
                                         <ExternalLink className="w-2.5 h-2.5" />
                                         <span>Demo Activa</span>
                                       </span>
                                     ) : (
-                                      <span className="px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">
+                                      <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-[10px] font-mono text-slate-400 dark:text-zinc-500">
                                         Sin demo
                                       </span>
                                     )}
                                   </div>
-                                  <h4 className="font-syne font-bold text-white text-base truncate">
+                                  <h4 className="font-syne font-bold text-slate-900 dark:text-white text-base truncate">
                                     {prod.title}
                                   </h4>
-                                  <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5">
+                                  <p className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-2 mt-0.5">
                                     {prod.description}
                                   </p>
                                 </div>
                               </div>
 
-                              <div className="pt-3 border-t border-[#1f2633] flex items-center justify-between gap-2">
-                                <span className="text-xs font-mono font-bold text-[#00c2b2] tabular-nums">
+                              <div className="pt-3 border-t border-slate-200 dark:border-[#1f2633] flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-xs font-mono font-bold text-[#008f82] dark:text-[#00c2b2] tabular-nums">
                                   {prod.price || 'Consultar Cotización'}
                                 </span>
                                 <div className="flex items-center gap-1.5">
@@ -2024,7 +2227,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                     type="button"
                                     disabled={realIdx <= 0}
                                     onClick={() => handleMoveProduct(prod.id, 'up')}
-                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                    className={`min-h-[38px] min-w-[36px] flex items-center justify-center rounded-lg disabled:opacity-30 cursor-pointer ${btnSecondary}`}
                                     title="Subir posición"
                                   >
                                     <ArrowUp className="w-3.5 h-3.5" />
@@ -2033,7 +2236,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                     type="button"
                                     disabled={realIdx === -1 || realIdx >= draftProducts.length - 1}
                                     onClick={() => handleMoveProduct(prod.id, 'down')}
-                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                    className={`min-h-[38px] min-w-[36px] flex items-center justify-center rounded-lg disabled:opacity-30 cursor-pointer ${btnSecondary}`}
                                     title="Bajar posición"
                                   >
                                     <ArrowDown className="w-3.5 h-3.5" />
@@ -2041,7 +2244,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleDuplicateProduct(prod)}
-                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white cursor-pointer"
+                                    className={`min-h-[38px] min-w-[36px] flex items-center justify-center rounded-lg cursor-pointer ${btnSecondary}`}
                                     title="Duplicar sistema"
                                   >
                                     <Copy className="w-3.5 h-3.5" />
@@ -2049,15 +2252,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleStartEditProduct(prod)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 cursor-pointer"
+                                    className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono cursor-pointer ${btnSecondary}`}
                                   >
-                                    <Edit2 className="w-3.5 h-3.5 text-[#00c2b2]" />
+                                    <Edit2 className="w-3.5 h-3.5 text-[#008f82] dark:text-[#00c2b2]" />
                                     <span>Editar</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                                    className="min-h-[38px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                                     title="Eliminar sistema"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -2079,21 +2282,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {activeTab === 'categories' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div>
-                    <h2 className="text-xl font-bold font-syne text-white">
+                    <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                       Pestañas de Categorías del Catálogo
                     </h2>
-                    <p className="text-xs text-zinc-400 font-mono">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                       Estas son las pestañas que tus visitantes ven arriba de los sistemas para filtrar.
                     </p>
                   </div>
 
-                  <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
-                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
+                  <div className={`p-5 rounded-2xl space-y-4 ${cardSurface}`}>
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#008f82] dark:text-[#00c2b2] block">
                       + Añadir Nueva Categoría
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           Identificador ID (ej: telecom, cloud, servidores)
                         </label>
                         <input
@@ -2101,11 +2304,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           value={newCatId}
                           onChange={(e) => setNewCatId(e.target.value)}
                           placeholder="telecom"
-                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl font-mono text-xs ${inputSurface}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           Nombre Visible en Pantalla
                         </label>
                         <input
@@ -2113,14 +2316,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           value={newCatLabel}
                           onChange={(e) => setNewCatLabel(e.target.value)}
                           placeholder="Telecomunicaciones & Enlaces"
-                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl font-mono text-xs ${inputSurface}`}
                         />
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={handleAddCategory}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
+                      className="min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
                     >
                       <Plus className="w-4 h-4 stroke-[2.5]" />
                       <span>Agregar Categoría</span>
@@ -2136,33 +2339,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       return (
                         <div
                           key={cat.id}
-                          className="p-4 rounded-xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cardSurface}`}
                         >
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="px-2.5 py-1 rounded-md bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-[#00c2b2] font-semibold">
+                          <div className="flex items-center gap-3 flex-wrap flex-1">
+                            <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a] text-xs font-mono text-[#008f82] dark:text-[#00c2b2] font-semibold">
                               {cat.id}
                             </span>
                             <input
                               type="text"
                               value={cat.label}
                               onChange={(e) => handleUpdateCategoryLabel(cat.id, e.target.value)}
-                              className="px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-white text-xs font-mono focus:border-[#00c2b2] focus:outline-hidden w-64"
+                              className={`min-h-[40px] flex-1 sm:max-w-xs px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                             />
-                            <span className="text-xs font-mono text-zinc-400">
+                            <span className="text-xs font-mono text-slate-500 dark:text-zinc-400">
                               ({count} sistemas)
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2 self-end sm:self-auto">
                             {cat.id === 'all' ? (
-                              <span className="text-[10px] font-mono text-zinc-500 italic">
+                              <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 italic">
                                 Categoría raíz (obligatoria)
                               </span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteCategory(cat.id)}
-                                className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                                className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -2182,27 +2385,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <div className="space-y-6 animate-fadeIn">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-xl font-bold font-syne text-white">
+                      <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                         Identidad Profesional, Foto & Hero
                       </h2>
-                      <p className="text-xs text-zinc-400 font-mono">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                         Edita tu foto oficial, textos de portada (Hero), biografía "Sobre Mí" y métricas.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={handleSaveProfile}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                      className="min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
                     >
                       <Save className="w-4 h-4" />
                       <span>Guardar Cambios de Perfil</span>
                     </button>
                   </div>
 
-                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-6">
+                  <div className={`p-4 sm:p-6 rounded-2xl space-y-6 ${cardSurface}`}>
                     {/* Foto de Perfil */}
-                    <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-[#0b0e14] border border-[#262d3a]">
-                      <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-[#00c2b2] shrink-0 bg-[#12161f]">
+                    <div className={`flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl ${subCardSurface}`}>
+                      <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-[#00c2b2] shrink-0 bg-white dark:bg-[#12161f]">
                         {draftProfile.avatarUrl ? (
                           <img
                             src={draftProfile.avatarUrl}
@@ -2218,12 +2421,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                       <div className="flex-1 space-y-2 w-full">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
+                          <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 uppercase">
                             Foto de Perfil Oficial
                           </label>
                           <label
                             htmlFor="profile-photo-upload-btn"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#262d3a]"
+                            className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}
                           >
                             <Upload className="w-3.5 h-3.5" />
                             <span>Subir desde dispositivo</span>
@@ -2239,7 +2442,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               try {
                                 const compressed = await compressImageFile(file, 900, 0.85);
                                 setDraftProfile({ ...draftProfile, avatarUrl: compressed });
-                                showToast('Foto cargada. Haz clic en "Guardar Cambios de Perfil" para aplicarla.');
+                                showToast('Foto cargada. Toca "Guardar Cambios de Perfil" para aplicarla.');
                               } catch {
                                 showToast('Error al procesar la imagen.');
                               }
@@ -2251,93 +2454,93 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           value={draftProfile.avatarUrl || ''}
                           onChange={(e) => setDraftProfile({ ...draftProfile, avatarUrl: e.target.value })}
                           placeholder="O pega un enlace de imagen (https://...)"
-                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl font-mono text-xs ${inputSurface}`}
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Nombre Completo
                         </label>
                         <input
                           type="text"
                           value={draftProfile.name}
                           onChange={(e) => setDraftProfile({ ...draftProfile, name: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Cargo / Título Profesional
                         </label>
                         <input
                           type="text"
                           value={draftProfile.title}
                           onChange={(e) => setDraftProfile({ ...draftProfile, title: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Ubicación & Modalidad
                         </label>
                         <input
                           type="text"
                           value={draftProfile.location}
                           onChange={(e) => setDraftProfile({ ...draftProfile, location: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Estado de Disponibilidad
                         </label>
                         <input
                           type="text"
                           value={draftProfile.availability}
                           onChange={(e) => setDraftProfile({ ...draftProfile, availability: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                      <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                         Tagline de Bienvenida (Hero Principal)
                       </label>
                       <textarea
                         rows={2}
                         value={draftProfile.tagline}
                         onChange={(e) => setDraftProfile({ ...draftProfile, tagline: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                      <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                         Biografía Completa ("Sobre Mí")
                       </label>
                       <textarea
                         rows={4}
                         value={draftProfile.bio}
                         onChange={(e) => setDraftProfile({ ...draftProfile, bio: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        className={`w-full px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                       />
                     </div>
 
                     {/* Stats / KPIs */}
                     <div>
-                      <span className="block text-xs font-mono font-bold text-zinc-300 mb-3 uppercase">
+                      <span className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-3 uppercase">
                         Métricas & KPIs Destacados
                       </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {draftProfile.stats.map((stat, sIdx) => (
-                          <div key={sIdx} className="p-3.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] space-y-2">
+                          <div key={sIdx} className={`p-3.5 rounded-xl space-y-2 ${subCardSurface}`}>
                             <input
                               type="text"
                               value={stat.label}
@@ -2346,7 +2549,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 newStats[sIdx] = { ...newStats[sIdx], label: e.target.value };
                                 setDraftProfile({ ...draftProfile, stats: newStats });
                               }}
-                              className="w-full px-2 py-1 text-[11px] font-mono text-zinc-400 bg-transparent border-b border-[#262d3a] focus:outline-hidden"
+                              className="w-full px-2 py-1 text-[11px] font-mono text-slate-500 dark:text-zinc-400 bg-transparent border-b border-slate-200 dark:border-[#262d3a] focus:outline-hidden"
                             />
                             <input
                               type="text"
@@ -2356,18 +2559,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 newStats[sIdx] = { ...newStats[sIdx], value: e.target.value };
                                 setDraftProfile({ ...draftProfile, stats: newStats });
                               }}
-                              className="w-full px-2.5 py-1.5 text-sm font-bold font-syne text-[#00c2b2] bg-[#12161f] border border-[#262d3a] rounded-lg focus:outline-hidden tabular-nums"
+                              className="w-full px-2.5 py-1.5 text-sm font-bold font-syne text-[#008f82] dark:text-[#00c2b2] bg-white dark:bg-[#12161f] border border-slate-200 dark:border-[#262d3a] rounded-lg focus:outline-hidden tabular-nums"
                             />
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="pt-4 border-t border-[#1f2633] flex justify-end">
+                    <div className="pt-4 border-t border-slate-200 dark:border-[#1f2633] flex justify-end">
                       <button
                         type="button"
                         onClick={handleSaveProfile}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                        className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
                       >
                         <Save className="w-4 h-4" />
                         <span>Guardar Información de Perfil</span>
@@ -2381,29 +2584,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {/* TAB 4: SKILLS, EDUCATION & CERTIFICATIONS */}
               {/* ========================================================= */}
               {activeTab === 'skills' && (
-                <div className="space-y-8 animate-fadeIn">
+                <div className="space-y-6 sm:space-y-8 animate-fadeIn">
                   <div>
-                    <h2 className="text-xl font-bold font-syne text-white">
+                    <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                       Stack Tecnológico, Educación & Certificaciones
                     </h2>
-                    <p className="text-xs text-zinc-400 font-mono">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                       Administra tus disciplinas técnicas, formación académica y certificaciones.
                     </p>
                   </div>
 
                   {/* Add Skill Category */}
-                  <div className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row items-center gap-3">
+                  <div className={`p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center gap-3 ${cardSurface}`}>
                     <input
                       type="text"
                       value={newSkillCatName}
                       onChange={(e) => setNewSkillCatName(e.target.value)}
-                      placeholder="Nombre de nueva categoría o disciplina (ej: Redes & MikroTik, Cloud & DevOps)"
-                      className="flex-1 w-full px-3.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                      placeholder="Nombre de nueva categoría (ej: Redes & MikroTik, Cloud & DevOps)"
+                      className={`flex-1 w-full min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                     />
                     <button
                       type="button"
                       onClick={handleAddSkillCategory}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                      className="min-h-[42px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
                     >
                       <Plus className="w-4 h-4 stroke-[2.5]" />
                       <span>+ Crear Categoría</span>
@@ -2413,27 +2616,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   {/* Skills Groups */}
                   <div className="space-y-4">
                     {draftProfile.skills.map((group, gIdx) => (
-                      <div key={gIdx} className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
-                        <div className="flex items-center justify-between pb-2 border-b border-[#1f2633]">
+                      <div key={gIdx} className={`p-4 sm:p-5 rounded-2xl space-y-3 ${cardSurface}`}>
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-[#1f2633]">
                           {editingSkillCatIdx === gIdx ? (
                             <div className="flex items-center gap-2 flex-1 mr-3">
                               <input
                                 type="text"
                                 value={editingSkillCatName}
                                 onChange={(e) => setEditingSkillCatName(e.target.value)}
-                                className="flex-1 px-2.5 py-1 rounded-lg bg-[#0b0e14] border border-[#00c2b2] text-xs font-mono font-bold text-white uppercase focus:outline-hidden"
+                                className={`flex-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold uppercase ${inputSurface}`}
                               />
                               <button
                                 type="button"
                                 onClick={() => handleSaveSkillCategoryName(gIdx)}
-                                className="p-1 rounded-lg bg-[#00c2b2] text-[#0b0e14] cursor-pointer"
+                                className="p-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] cursor-pointer"
                               >
                                 <Check className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <h4 className="font-syne font-bold text-white text-sm uppercase tracking-wider">
+                              <h4 className="font-syne font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider">
                                 {group.category}
                               </h4>
                               <button
@@ -2442,18 +2645,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   setEditingSkillCatIdx(gIdx);
                                   setEditingSkillCatName(group.category);
                                 }}
-                                className="p-1 rounded-md text-zinc-500 hover:text-[#00c2b2] cursor-pointer"
+                                className="p-1.5 rounded-md text-slate-400 hover:text-[#008f82] dark:hover:text-[#00c2b2] cursor-pointer"
                               >
-                                <Edit2 className="w-3 h-3" />
+                                <Edit2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           )}
                           <button
                             type="button"
                             onClick={() => handleDeleteSkillCategory(gIdx)}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
 
@@ -2461,13 +2664,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           {group.items.map((item, iIdx) => (
                             <span
                               key={iIdx}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-200"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#0b0e14] border border-slate-200 dark:border-[#262d3a] text-xs font-mono text-slate-700 dark:text-zinc-200"
                             >
                               <span>{item}</span>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveSkillItem(gIdx, iIdx)}
-                                className="text-zinc-500 hover:text-red-400 cursor-pointer ml-1"
+                                className="text-slate-400 hover:text-red-500 cursor-pointer ml-1 px-1"
                               >
                                 &times;
                               </button>
@@ -2487,12 +2690,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               }
                             }}
                             placeholder={`+ Agregar habilidad a ${group.category}...`}
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                            className={`flex-1 min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                           />
                           <button
                             type="button"
                             onClick={() => handleAddSkillItem(gIdx)}
-                            className="px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] font-mono text-xs cursor-pointer"
+                            className={`min-h-[40px] px-3.5 py-1.5 rounded-lg text-[#008f82] dark:text-[#00c2b2] font-mono text-xs font-bold cursor-pointer ${btnSecondary}`}
                           >
                             Añadir
                           </button>
@@ -2504,20 +2707,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   {/* Education & Certifications */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Education */}
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
-                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
-                        <GraduationCap className="w-4 h-4 text-[#00c2b2]" />
+                    <div className={`p-5 rounded-2xl space-y-4 ${cardSurface}`}>
+                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
+                        <GraduationCap className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                         <span>Educación & Títulos</span>
                       </h3>
                       <div className="space-y-2">
                         {(draftProfile.education || []).map((ed, idx) => (
                           <div
                             key={idx}
-                            className="p-3 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex items-center justify-between gap-2"
+                            className={`p-3 rounded-xl flex items-center justify-between gap-2 ${subCardSurface}`}
                           >
                             <div>
-                              <p className="text-xs font-bold text-white">{ed.degree}</p>
-                              <p className="text-[11px] font-mono text-zinc-400">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white">{ed.degree}</p>
+                              <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
                                 {ed.institution} • {ed.year}
                               </p>
                             </div>
@@ -2532,20 +2735,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 saveProfile(updated);
                                 onUpdateProfile(updated);
                               }}
-                              className="p-1.5 text-zinc-400 hover:text-red-400 cursor-pointer"
+                              className="p-2 text-slate-400 hover:text-red-500 cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         ))}
                       </div>
-                      <div className="space-y-2 pt-2 border-t border-[#1f2633]">
+                      <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-[#1f2633]">
                         <input
                           type="text"
                           value={eduForm.degree}
                           onChange={(e) => setEduForm({ ...eduForm, degree: e.target.value })}
                           placeholder="Título o Carrera..."
-                          className="w-full px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`w-full min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                         />
                         <div className="flex gap-2">
                           <input
@@ -2553,14 +2756,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={eduForm.institution}
                             onChange={(e) => setEduForm({ ...eduForm, institution: e.target.value })}
                             placeholder="Institución..."
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`flex-1 min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                           />
                           <input
                             type="text"
                             value={eduForm.year}
                             onChange={(e) => setEduForm({ ...eduForm, year: e.target.value })}
                             placeholder="Año"
-                            className="w-24 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-24 min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                         <button
@@ -2577,7 +2780,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             setEduForm({ degree: '', institution: '', year: '' });
                             showToast('Educación añadida.');
                           }}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                          className="min-h-[40px] px-4 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
                         >
                           + Añadir Educación
                         </button>
@@ -2585,18 +2788,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </div>
 
                     {/* Certifications */}
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
-                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
-                        <Award className="w-4 h-4 text-amber-400" />
+                    <div className={`p-5 rounded-2xl space-y-4 ${cardSurface}`}>
+                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-500" />
                         <span>Certificaciones & Cursos</span>
                       </h3>
                       <div className="space-y-2">
                         {(draftProfile.certifications || []).map((cert, idx) => (
                           <div
                             key={idx}
-                            className="p-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex items-center justify-between gap-2"
+                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 ${subCardSurface}`}
                           >
-                            <span className="text-xs font-mono text-zinc-200">{cert}</span>
+                            <span className="text-xs font-mono text-slate-700 dark:text-zinc-200">{cert}</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -2608,20 +2811,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 saveProfile(updated);
                                 onUpdateProfile(updated);
                               }}
-                              className="p-1 text-zinc-400 hover:text-red-400 cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-red-500 cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         ))}
                       </div>
-                      <div className="flex gap-2 pt-2 border-t border-[#1f2633]">
+                      <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-[#1f2633]">
                         <input
                           type="text"
                           value={newCertText}
                           onChange={(e) => setNewCertText(e.target.value)}
                           placeholder="Nueva certificación o logro..."
-                          className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`flex-1 min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                         />
                         <button
                           type="button"
@@ -2637,7 +2840,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             setNewCertText('');
                             showToast('Certificación añadida.');
                           }}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                          className="min-h-[40px] px-4 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
                         >
                           + Añadir
                         </button>
@@ -2654,10 +2857,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <div className="space-y-6 animate-fadeIn">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-xl font-bold font-syne text-white">
+                      <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                         Historial Profesional & Trayectoria
                       </h2>
-                      <p className="text-xs text-zinc-400 font-mono">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                         Puestos y roles que aparecen en tu cronología laboral.
                       </p>
                     </div>
@@ -2668,7 +2871,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           setIsAddingExp(true);
                           setExpForm({ role: '', company: '', period: '', description: '' });
                         }}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
+                        className="min-h-[42px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
                       >
                         <Plus className="w-4 h-4 stroke-[2.5]" />
                         <span>+ Añadir Posición</span>
@@ -2677,46 +2880,46 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
 
                   {(isAddingExp || editingExpIdx !== null) && (
-                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#262d3a] space-y-4">
-                      <span className="text-xs font-mono font-bold uppercase text-[#00c2b2] block">
+                    <div className={`p-5 rounded-2xl space-y-4 ${cardSurface}`}>
+                      <span className="text-xs font-mono font-bold uppercase text-[#008f82] dark:text-[#00c2b2] block">
                         {isAddingExp ? '+ Nueva Posición Laboral' : 'Editar Posición'}
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Rol / Cargo</label>
+                          <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">Rol / Cargo</label>
                           <input
                             type="text"
                             value={expForm.role}
                             onChange={(e) => setExpForm({ ...expForm, role: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Empresa / Firma</label>
+                          <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">Empresa / Firma</label>
                           <input
                             type="text"
                             value={expForm.company}
                             onChange={(e) => setExpForm({ ...expForm, company: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Período</label>
+                          <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">Período</label>
                           <input
                             type="text"
                             value={expForm.period}
                             onChange={(e) => setExpForm({ ...expForm, period: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">Descripción</label>
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">Descripción</label>
                         <textarea
                           rows={3}
                           value={expForm.description}
                           onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`w-full px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div className="flex items-center justify-end gap-3">
@@ -2726,14 +2929,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             setIsAddingExp(false);
                             setEditingExpIdx(null);
                           }}
-                          className="px-4 py-2 rounded-xl text-xs font-mono bg-[#161b26] text-zinc-300 cursor-pointer"
+                          className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           Cancelar
                         </button>
                         <button
                           type="button"
                           onClick={handleSaveExperience}
-                          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#00c2b2] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                          className="min-h-[40px] inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#00c2b2] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
                         >
                           <Save className="w-3.5 h-3.5" />
                           <span>Guardar</span>
@@ -2746,15 +2949,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     {draftProfile.experience.map((exp, idx) => (
                       <div
                         key={idx}
-                        className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                        className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-4 ${cardSurface}`}
                       >
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-syne font-bold text-white text-sm">{exp.role}</h4>
-                            <span className="text-[11px] font-mono text-[#00c2b2] font-semibold">{exp.period}</span>
+                            <h4 className="font-syne font-bold text-slate-900 dark:text-white text-sm">{exp.role}</h4>
+                            <span className="text-[11px] font-mono text-[#008f82] dark:text-[#00c2b2] font-semibold">{exp.period}</span>
                           </div>
                           <p className="text-xs font-mono text-[#ff7a00] mt-0.5">{exp.company}</p>
-                          <p className="text-xs text-zinc-300 mt-2 leading-relaxed">{exp.description}</p>
+                          <p className="text-xs text-slate-600 dark:text-zinc-300 mt-2 leading-relaxed">{exp.description}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                           <button
@@ -2764,14 +2967,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               setExpForm({ ...exp });
                               setIsAddingExp(false);
                             }}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-[#161b26] cursor-pointer"
+                            className={`p-2 rounded-lg cursor-pointer ${btnSecondary}`}
                           >
-                            <Edit2 className="w-4 h-4 text-[#00c2b2]" />
+                            <Edit2 className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteExperience(idx)}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 cursor-pointer"
+                            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -2788,26 +2991,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {activeTab === 'contact' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div>
-                    <h2 className="text-xl font-bold font-syne text-white">
+                    <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                       Canales de Contacto Directo, WhatsApp & Redes Sociales
                     </h2>
-                    <p className="text-xs text-zinc-400 font-mono">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                       Personaliza tu número de WhatsApp para chat directo y agrega tus redes sociales.
                     </p>
                   </div>
 
                   {/* WhatsApp Configuration Card */}
-                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#25D366]/30 space-y-5">
-                    <div className="flex items-center gap-3 pb-3 border-b border-[#1f2633]">
-                      <div className="p-2.5 rounded-xl bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30">
+                  <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#12161f] border border-[#25D366]/40 space-y-5 shadow-xs">
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-[#1f2633]">
+                      <div className="p-2.5 rounded-xl bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30 shrink-0">
                         <MessageCircle className="w-5 h-5 fill-current" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold font-syne text-white">
+                        <h4 className="text-sm font-bold font-syne text-slate-900 dark:text-white">
                           Contacto Directo por WhatsApp (Enlace wa.me)
                         </h4>
-                        <p className="text-xs text-zinc-400 font-mono">
-                          Permite que tus clientes te escriban con 1 clic desde la web y el botón flotante.
+                        <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
+                          Permite que tus clientes te escriban con 1 toque desde la web y el botón flotante.
                         </p>
                       </div>
                     </div>
@@ -2840,18 +3043,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             });
                             showToast(`Código ${country.name} (${country.code}) aplicado`);
                           }}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0b0e14] hover:bg-[#161b26] border border-[#262d3a] text-xs font-mono text-zinc-300 cursor-pointer"
+                          className={`min-h-[38px] inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           <span>{country.flag}</span>
-                          <span className="font-bold text-[#25D366]">{country.code}</span>
-                          <span className="text-[10px] text-zinc-400">{country.name}</span>
+                          <span className="font-bold text-emerald-600 dark:text-[#25D366]">{country.code}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-zinc-400">{country.name}</span>
                         </button>
                       ))}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Tu Número de Teléfono / WhatsApp
                         </label>
                         <input
@@ -2871,68 +3074,68 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             });
                           }}
                           placeholder="Ej: +58 412 1234567"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                           Mensaje Predeterminado del Chat
                         </label>
                         <input
                           type="text"
                           value={whatsappMessage}
                           onChange={(e) => setWhatsappMessage(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
+                          className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                      <label className="block text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase">
                         Correo Electrónico Principal
                       </label>
                       <input
                         type="email"
                         value={draftProfile.email}
                         onChange={(e) => setDraftProfile({ ...draftProfile, email: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl font-mono text-sm ${inputSurface}`}
                       />
                     </div>
                   </div>
 
                   {/* Social Networks */}
-                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-5">
+                  <div className={`p-4 sm:p-6 rounded-2xl space-y-5 ${cardSurface}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h4 className="text-sm font-bold font-syne text-white uppercase tracking-wider">
+                      <h4 className="text-sm font-bold font-syne text-slate-900 dark:text-white uppercase tracking-wider">
                         Redes Sociales & Enlaces ({draftProfile.socials.length})
                       </h4>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => handleAddSocialNetwork('Instagram', 'https://instagram.com/tu_usuario', 'Instagram')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-pink-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                          className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-pink-500 text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           <Instagram className="w-3.5 h-3.5" /> + Instagram
                         </button>
                         <button
                           type="button"
                           onClick={() => handleAddSocialNetwork('Facebook', 'https://facebook.com/tu_pagina', 'Facebook')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-blue-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                          className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-blue-500 text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           <Facebook className="w-3.5 h-3.5" /> + Facebook
                         </button>
                         <button
                           type="button"
                           onClick={() => handleAddSocialNetwork('YouTube', 'https://youtube.com/@tu_canal', 'Youtube')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-red-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                          className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-red-500 text-xs font-mono cursor-pointer ${btnSecondary}`}
                         >
                           <Youtube className="w-3.5 h-3.5" /> + YouTube
                         </button>
                         <button
                           type="button"
                           onClick={() => setIsAddingSocial(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                          className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" /> Otra Red
                         </button>
@@ -2940,33 +3143,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </div>
 
                     {isAddingSocial && (
-                      <div className="p-4 rounded-xl bg-[#0b0e14] border border-[#00c2b2]/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#0b0e14] border border-[#00c2b2]/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <input
                           type="text"
                           value={newSocialName}
                           onChange={(e) => setNewSocialName(e.target.value)}
                           placeholder="Nombre (ej: LinkedIn, TikTok)"
-                          className="px-3 py-2 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-mono ${inputSurface}`}
                         />
                         <input
                           type="url"
                           value={newSocialUrl}
                           onChange={(e) => setNewSocialUrl(e.target.value)}
                           placeholder="https://..."
-                          className="px-3 py-2 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-mono ${inputSurface}`}
                         />
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => handleAddSocialNetwork(newSocialName, newSocialUrl, 'Globe')}
-                            className="flex-1 px-3 py-2 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                            className="flex-1 min-h-[40px] px-3 py-2 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
                           >
                             Agregar
                           </button>
                           <button
                             type="button"
                             onClick={() => setIsAddingSocial(false)}
-                            className="px-3 py-2 rounded-lg bg-[#161b26] text-zinc-400 text-xs font-mono cursor-pointer"
+                            className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-mono cursor-pointer ${btnSecondary}`}
                           >
                             Cancelar
                           </button>
@@ -2978,10 +3181,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       {draftProfile.socials.map((social, sIdx) => (
                         <div
                           key={sIdx}
-                          className="p-3.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex flex-col sm:flex-row items-center gap-3"
+                          className={`p-3.5 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 ${subCardSurface}`}
                         >
                           <div className="flex items-center gap-2 w-full sm:w-48 shrink-0">
-                            <Globe className="w-4 h-4 text-[#00c2b2] shrink-0" />
+                            <Globe className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2] shrink-0" />
                             <input
                               type="text"
                               value={social.name}
@@ -2990,35 +3193,37 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 updatedSocials[sIdx] = { ...updatedSocials[sIdx], name: e.target.value };
                                 setDraftProfile({ ...draftProfile, socials: updatedSocials });
                               }}
-                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
+                              className={`w-full min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
                             />
                           </div>
-                          <input
-                            type="text"
-                            value={social.url}
-                            onChange={(e) => {
-                              const updatedSocials = [...draftProfile.socials];
-                              updatedSocials[sIdx] = { ...updatedSocials[sIdx], url: e.target.value };
-                              setDraftProfile({ ...draftProfile, socials: updatedSocials });
-                            }}
-                            className="flex-1 w-full px-3 py-1.5 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-zinc-300"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSocialNetwork(sIdx)}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={social.url}
+                              onChange={(e) => {
+                                const updatedSocials = [...draftProfile.socials];
+                                updatedSocials[sIdx] = { ...updatedSocials[sIdx], url: e.target.value };
+                                setDraftProfile({ ...draftProfile, socials: updatedSocials });
+                              }}
+                              className={`flex-1 w-full min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-mono ${inputSurface}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSocialNetwork(sIdx)}
+                              className="p-2 rounded-lg text-slate-400 hover:text-red-500 cursor-pointer shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="pt-4 border-t border-[#1f2633] flex justify-end">
+                    <div className="pt-4 border-t border-slate-200 dark:border-[#1f2633] flex justify-end">
                       <button
                         type="button"
                         onClick={() => handleUpdateContact(draftProfile.email, draftProfile.whatsapp || '')}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                        className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
                       >
                         <Save className="w-4 h-4" />
                         <span>Guardar Contacto, Redes & WhatsApp</span>
@@ -3034,20 +3239,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {activeTab === 'security' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div>
-                    <h2 className="text-xl font-bold font-syne text-white">
+                    <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
                       Base de Datos NocoDB Cloud, Exportación HTML & Seguridad
                     </h2>
-                    <p className="text-xs text-zinc-400 font-mono">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                       Configura la sincronización en tiempo real con NocoDB Cloud, descarga tus páginas independientes o cambia tu clave.
                     </p>
                   </div>
 
                   {/* NocoDB Cloud Card */}
-                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#00c2b2]/40 space-y-4">
+                  <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#12161f] border border-[#00c2b2]/40 space-y-4 shadow-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#00c2b2] animate-pulse" />
-                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2]">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 dark:bg-[#00c2b2] animate-pulse" />
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#008f82] dark:text-[#00c2b2]">
                           Base de Datos Principal: NocoDB Cloud (Conectada)
                         </span>
                       </div>
@@ -3055,7 +3260,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         href={`${nocoConfig.baseUrl}/#/nc/${nocoConfig.baseId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-mono text-[#00c2b2] hover:underline"
+                        className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-[#008f82] dark:text-[#00c2b2] hover:underline"
                       >
                         <span>Abrir Base en NocoDB</span>
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -3064,51 +3269,51 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           URL Servidor NocoDB
                         </label>
                         <input
                           type="text"
                           value={nocoConfig.baseUrl}
                           onChange={(e) => setNocoConfig({ ...nocoConfig, baseUrl: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           Base ID (Proyecto)
                         </label>
                         <input
                           type="text"
                           value={nocoConfig.baseId}
                           onChange={(e) => setNocoConfig({ ...nocoConfig, baseId: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           API Token (xc-token)
                         </label>
                         <input
                           type="password"
                           value={nocoConfig.apiToken}
                           onChange={(e) => setNocoConfig({ ...nocoConfig, apiToken: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           Tabla Productos (ID)
                         </label>
                         <input
                           type="text"
                           value={nocoConfig.productsTableId}
                           onChange={(e) => setNocoConfig({ ...nocoConfig, productsTableId: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                           Tablas Categorías / Config (IDs)
                         </label>
                         <div className="grid grid-cols-2 gap-2">
@@ -3116,13 +3321,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             type="text"
                             value={nocoConfig.categoriesTableId}
                             onChange={(e) => setNocoConfig({ ...nocoConfig, categoriesTableId: e.target.value })}
-                            className="w-full px-2.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                            className={`w-full min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                           <input
                             type="text"
                             value={nocoConfig.configTableId}
                             onChange={(e) => setNocoConfig({ ...nocoConfig, configTableId: e.target.value })}
-                            className="w-full px-2.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                            className={`w-full min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                       </div>
@@ -3133,7 +3338,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         type="button"
                         disabled={isSyncingNoco}
                         onClick={handleManualNocoSync}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
+                        className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
                       >
                         <Save className="w-4 h-4" />
                         <span>
@@ -3146,18 +3351,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
 
                   {/* Standalone HTML Export Card */}
-                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
-                    <h3 className="text-sm font-bold font-syne text-white uppercase tracking-wider">
+                  <div className={`p-4 sm:p-6 rounded-2xl space-y-4 ${cardSurface}`}>
+                    <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white uppercase tracking-wider">
                       Descarga de Páginas Independientes (index.html y admin.html)
                     </h3>
-                    <p className="text-xs text-zinc-400">
-                      Si subes tus archivos a Cloudflare Pages, GitHub Pages o los usas localmente en tu PC, puedes descargar ambos archivos compilados con tus últimos cambios.
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
+                      Si subes tus archivos a Cloudflare Pages, GitHub Pages o los usas localmente, puedes descargar ambos archivos compilados con tus últimos cambios.
                     </p>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                       <button
                         type="button"
                         onClick={() => downloadStandaloneHtml('index.html')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
+                        className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
                         <span>Descargar index.html (Web Pública)</span>
@@ -3165,7 +3370,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <button
                         type="button"
                         onClick={() => downloadStandaloneAdminHtml()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#00c2b2]/40 text-[#00c2b2] text-xs font-mono font-bold cursor-pointer"
+                        className={`min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-bold cursor-pointer ${btnSecondary}`}
                       >
                         <Download className="w-4 h-4" />
                         <span>Descargar admin.html (Panel Admin Separado)</span>
@@ -3175,13 +3380,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Change password card */}
-                    <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
+                    <div className={`p-5 sm:p-6 rounded-2xl space-y-4 ${cardSurface}`}>
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#008f82] dark:text-[#00c2b2] block">
                         Modificar Clave de Acceso Admin
                       </span>
                       <form onSubmit={handleChangePassword} className="space-y-4">
                         <div>
-                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                             Nueva Contraseña
                           </label>
                           <input
@@ -3190,11 +3395,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                             placeholder="Mínimo 4 caracteres..."
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-full min-h-[42px] px-3.5 py-2.5 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
                             Confirmar Nueva Contraseña
                           </label>
                           <input
@@ -3203,13 +3408,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="Repite la nueva contraseña..."
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                            className={`w-full min-h-[42px] px-3.5 py-2.5 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
                         </div>
-                        {passwordError && <p className="text-xs font-mono text-red-400">{passwordError}</p>}
+                        {passwordError && <p className="text-xs font-mono text-red-500">{passwordError}</p>}
                         <button
                           type="submit"
-                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                          className="w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
                         >
                           <Key className="w-3.5 h-3.5" />
                           <span>Actualizar Contraseña</span>
@@ -3218,20 +3423,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </div>
 
                     {/* Reset factory */}
-                    <div className="p-6 rounded-2xl bg-red-950/20 border border-red-900/40 space-y-3 flex flex-col justify-between">
+                    <div className="p-5 sm:p-6 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 space-y-3 flex flex-col justify-between">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-red-400 font-syne font-bold text-sm">
+                        <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-syne font-bold text-sm">
                           <AlertTriangle className="w-4 h-4" />
                           <span>Zona de Peligro / Restablecer de Fábrica</span>
                         </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
+                        <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
                           Restaura todos los productos, categorías y perfil a los datos iniciales de fábrica de Educom-Tec en este navegador.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={handleResetFactory}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-900/40 hover:bg-red-800/60 text-red-200 border border-red-700/50 font-mono text-xs cursor-pointer transition-colors self-start"
+                        className="min-h-[42px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-800/60 text-red-700 dark:text-red-200 border border-red-300 dark:border-red-700/50 font-mono text-xs cursor-pointer transition-colors self-start"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>Restablecer Datos de Fábrica</span>
@@ -3244,11 +3449,81 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </main>
         </div>
 
-        {/* Footer info bar */}
-        <footer className="px-6 py-3 border-t border-[#1f2633] bg-[#0f131c] flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-zinc-500 shrink-0">
+        {/* ========================================================= */}
+        {/* MOBILE BOTTOM THUMB-ZONE NAVIGATION BAR (<1024px) */}
+        {/* ========================================================= */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#0f131c]/95 backdrop-blur-md border-t border-slate-200 dark:border-[#1f2633] grid grid-cols-5 items-center h-15 px-1 pb-safe">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('dashboard');
+              setEditingProductId(null);
+            }}
+            className={`flex flex-col items-center justify-center h-full gap-0.5 text-[10px] font-mono cursor-pointer ${
+              activeTab === 'dashboard'
+                ? 'text-[#008f82] dark:text-[#00c2b2] font-bold'
+                : 'text-slate-500 dark:text-zinc-400'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            <span>Resumen</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('products');
+              setEditingProductId(null);
+            }}
+            className={`flex flex-col items-center justify-center h-full gap-0.5 text-[10px] font-mono cursor-pointer ${
+              activeTab === 'products' && !isCreatingProduct
+                ? 'text-[#008f82] dark:text-[#00c2b2] font-bold'
+                : 'text-slate-500 dark:text-zinc-400'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Sistemas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleStartCreateProduct}
+            className="flex flex-col items-center justify-center h-full gap-0.5 text-[10px] font-mono font-bold text-[#008f82] dark:text-[#00c2b2] cursor-pointer"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#00c2b2] text-[#0b0e14] flex items-center justify-center shadow-md">
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <span>Nuevo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('contact')}
+            className={`flex flex-col items-center justify-center h-full gap-0.5 text-[10px] font-mono cursor-pointer ${
+              activeTab === 'contact'
+                ? 'text-[#008f82] dark:text-[#00c2b2] font-bold'
+                : 'text-slate-500 dark:text-zinc-400'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>WhatsApp</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(true)}
+            className="flex flex-col items-center justify-center h-full gap-0.5 text-[10px] font-mono text-slate-500 dark:text-zinc-400 cursor-pointer"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Más</span>
+          </button>
+        </nav>
+
+        {/* Footer info bar (Desktop) */}
+        <footer className="hidden lg:flex px-6 py-3 border-t border-slate-200 dark:border-[#1f2633] bg-white dark:bg-[#0f131c] flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-500 dark:text-zinc-500 shrink-0">
           <span>Educom-Tec Admin Center (admin.html) • Raúl Eduardo Rodríguez</span>
-          <span className="text-[#00c2b2] flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#00c2b2] animate-pulse" />
+          <span className="text-emerald-600 dark:text-[#00c2b2] flex items-center gap-1.5 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-[#00c2b2] animate-pulse" />
             <span>NocoDB Cloud Activo (Base: {nocoConfig.baseId})</span>
           </span>
         </footer>

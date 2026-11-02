@@ -2,10 +2,18 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #ffffff;
+    background-color: #f8fafc;
     color: #0f172a;
+    overflow-x: hidden;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
   
@@ -17,6 +25,20 @@
   h1, h2, h3, h4, .font-display, .font-syne {
     font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
   }
+}
+
+/* Hide scrollbars on horizontal touch carousels / category pill bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area padding for mobile bottom bars */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0.5rem);
 }
 
 /* Custom subtle modern scrollbar */
@@ -53,7 +75,7 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   }
 }
 
-.animate-fade-in {
+.animate-fade-in, .animate-fadeIn {
   animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

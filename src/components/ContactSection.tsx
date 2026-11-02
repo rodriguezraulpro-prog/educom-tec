@@ -25,14 +25,16 @@ import { DigitalSignature } from './DigitalSignature';
 
 interface ContactSectionProps {
   profile: UserProfile;
-  selectedProductForContact: ProductOrProject | null;
-  onClearSelectedProduct: () => void;
+  selectedProductForContact?: ProductOrProject | null;
+  onClearSelectedProduct?: () => void;
+  initialSubject?: string;
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({
   profile,
-  selectedProductForContact,
+  selectedProductForContact = null,
   onClearSelectedProduct,
+  initialSubject,
 }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -43,7 +45,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Sync selected product if passed from showcase
+  // Sync selected product or initialSubject if passed from showcase
   useEffect(() => {
     if (selectedProductForContact) {
       setSubjectType('Adquisición / Consulta de Producto');
@@ -51,8 +53,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
       setMessage(
         `Hola ${profile.name}, me interesa obtener más información sobre "${selectedProductForContact.title}". Quisiera consultar detalles sobre...`
       );
+    } else if (initialSubject) {
+      setSubjectType('Adquisición / Consulta de Producto');
+      setProductRef(initialSubject);
+      setMessage(
+        `Hola ${profile.name}, me interesa consultar sobre "${initialSubject}". Quisiera recibir más información...`
+      );
     }
-  }, [selectedProductForContact, profile.name]);
+  }, [selectedProductForContact, initialSubject, profile.name]);
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText(profile.email);
@@ -319,16 +327,16 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                         setEmail('');
                         setMessage('');
                         setProductRef('');
-                        onClearSelectedProduct();
+                        onClearSelectedProduct?.();
                       }}
-                      className="px-5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                      className="min-h-[44px] px-5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
                     >
                       Enviar otro mensaje
                     </button>
                     <button
                       type="button"
                       onClick={handleMailtoDirect}
-                      className="px-5 py-2.5 text-xs font-semibold bg-[#1d4ed8] hover:bg-[#1e40af] text-white rounded-full transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+                      className="min-h-[44px] px-5 py-2.5 text-xs font-semibold bg-[#1d4ed8] hover:bg-[#1e40af] text-white rounded-full transition-all flex items-center gap-2 cursor-pointer shadow-xs"
                     >
                       <span>Abrir en correo directo</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -337,20 +345,25 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {selectedProductForContact && (
-                    <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 flex items-center justify-between text-xs">
-                      <div>
+                  {(selectedProductForContact || productRef) && (
+                    <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0">
                         <span className="text-blue-700 dark:text-blue-300 font-medium block text-[11px]">
-                          Consulta sobre producto seleccionado:
+                          Consulta sobre sistema / producto:
                         </span>
-                        <strong className="text-slate-900 dark:text-white font-bold">
-                          {selectedProductForContact.title} ({selectedProductForContact.price || 'A medida'})
+                        <strong className="text-slate-900 dark:text-white font-bold truncate block">
+                          {selectedProductForContact
+                            ? `${selectedProductForContact.title} (${selectedProductForContact.price || 'A medida'})`
+                            : productRef}
                         </strong>
                       </div>
                       <button
                         type="button"
-                        onClick={onClearSelectedProduct}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        onClick={() => {
+                          setProductRef('');
+                          onClearSelectedProduct?.();
+                        }}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer shrink-0 px-2 py-1"
                       >
                         Quitar
                       </button>
@@ -368,7 +381,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Ej: Sofia Morales"
-                        className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
+                        className="w-full min-h-[44px] px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
                       />
                     </div>
 
@@ -382,7 +395,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="ejemplo@empresa.com"
-                        className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
+                        className="w-full min-h-[44px] px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
                       />
                     </div>
                   </div>
@@ -395,7 +408,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       <select
                         value={subjectType}
                         onChange={(e) => setSubjectType(e.target.value)}
-                        className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] transition-all font-sans cursor-pointer"
+                        className="w-full min-h-[44px] px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] transition-all font-sans cursor-pointer"
                       >
                         <option value="Soporte Técnico TI">Soporte Técnico TI & Mesa de Ayuda</option>
                         <option value="Desarrollo de Sistemas / ERP">Desarrollo de Sistema / ERP / POS</option>
@@ -412,7 +425,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                         Modalidad
                       </label>
                       <select
-                        className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] transition-all font-sans cursor-pointer"
+                        className="w-full min-h-[44px] px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] transition-all font-sans cursor-pointer"
                       >
                         <option value="A evaluar">Por evaluar / Diagnóstico previo</option>
                         <option value="Soporte Puntual">Soporte puntual o correctivo</option>
@@ -433,7 +446,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="Describe la necesidad técnica de tu empresa, cantidad de equipos, sistemas requeridos..."
-                      className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
+                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-[#2563eb] dark:focus:border-[#38bdf8] focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
                     />
                   </div>
 
@@ -441,7 +454,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     <button
                       type="button"
                       onClick={handleMailtoDirect}
-                      className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="min-h-[40px] text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white flex items-center justify-center sm:justify-start gap-1.5 transition-colors cursor-pointer"
                     >
                       <span>O enviar vía correo electrónico</span>
                       <ExternalLink className="w-3.5 h-3.5 text-[#2563eb]" />
@@ -451,17 +464,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                       <button
                         type="button"
                         onClick={handleSendWhatsAppDirect}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-full transition-all cursor-pointer shadow-xs"
+                        className="min-h-[46px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-full transition-all cursor-pointer shadow-xs"
                         title="Enviar este mensaje directamente a WhatsApp"
                       >
-                        <MessageCircle className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-4 h-4" />
                         <span>Enviar por WhatsApp</span>
                       </button>
 
                       <button
                         id="submit-contact-form-btn"
                         type="submit"
-                        className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-semibold text-white bg-[#1d4ed8] hover:bg-[#1e40af] rounded-full transition-all cursor-pointer shadow-sm hover:shadow-md"
+                        className="min-h-[46px] inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-semibold text-white bg-[#1d4ed8] hover:bg-[#1e40af] rounded-full transition-all cursor-pointer shadow-sm hover:shadow-md"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>Enviar Mensaje</span>

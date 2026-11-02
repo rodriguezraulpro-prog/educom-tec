@@ -215,9 +215,11 @@ export function App() {
 
   // Pre-filled consultation jump to Contact form
   const [preselectedInquiry, setPreselectedInquiry] = useState<string>('');
+  const [selectedProductForContact, setSelectedProductForContact] = useState<ProductOrProject | null>(null);
 
   const handleContactProduct = (product: ProductOrProject) => {
     setSelectedProduct(null);
+    setSelectedProductForContact(product);
     setPreselectedInquiry(`Cotización / Demo: ${product.title}`);
     handleNavigate('contact');
   };
@@ -283,6 +285,9 @@ export function App() {
         onUpdateCategories={handleUpdateCategories}
         onUpdateProfile={handleUpdateProfile}
         onLogout={handleAdminLogout}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onSetTheme={setIsDark}
       />
     );
   }
@@ -290,7 +295,7 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0c101b] text-slate-900 dark:text-slate-100 relative selection:bg-[#2563eb] selection:text-white transition-colors duration-300">
       {/* Subtle Ambient Background */}
-      <ConstellationBackground />
+      <ConstellationBackground isDark={isDark} />
 
       {/* Top Sticky Navbar */}
       <Navbar
@@ -300,6 +305,7 @@ export function App() {
         onOpenAdminPanel={() => openAdminPage()}
         isDark={isDark}
         onToggleTheme={toggleTheme}
+        onSetTheme={setIsDark}
         avatarUrl={profile.avatarUrl}
       />
 
@@ -309,6 +315,8 @@ export function App() {
         <Hero
           profile={profile}
           products={products}
+          totalProductsCount={products.length}
+          isDark={isDark}
           onExploreClick={() => handleNavigate('showcase')}
           onContactClick={() => handleNavigate('contact')}
           onSelectProduct={(p) => setSelectedProduct(p)}
@@ -331,6 +339,8 @@ export function App() {
         {/* 4. Direct Contact & Inquiry Form */}
         <ContactSection
           profile={profile}
+          selectedProductForContact={selectedProductForContact}
+          onClearSelectedProduct={() => setSelectedProductForContact(null)}
           initialSubject={preselectedInquiry}
         />
       </main>
@@ -342,6 +352,8 @@ export function App() {
         isAdminLoggedIn={isAdminLoggedIn}
         onOpenAdminLogin={() => openAdminPage()}
         onOpenAdminPanel={() => openAdminPage()}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Floating WhatsApp Direct Chat Button */}
