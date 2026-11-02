@@ -16,10 +16,14 @@ export default defineConfig(() => {
       outDir: 'dist',
       assetsDir: 'assets',
       rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          admin: path.resolve(__dirname, 'admin.html'),
+        },
         output: {
-          entryFileNames: 'assets/app.js',
+          entryFileNames: 'assets/[name].js',
           chunkFileNames: 'assets/[name].js',
-          assetFileNames: 'assets/app.[ext]',
+          assetFileNames: 'assets/[name].[ext]',
         },
       },
     },

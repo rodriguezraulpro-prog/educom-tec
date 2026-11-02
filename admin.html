@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Educom-Tec — Panel de Administración | Centro de Control</title>
+    <meta
+      name="description"
+      content="Panel de Administración y Gestión de Catálogo, Sistemas, Perfil y Base de Datos NocoDB Cloud para Educom-Tec."
+    />
+    <meta property="og:title" content="Educom-Tec — Panel de Administración" />
+    <meta
+      property="og:description"
+      content="Centro de control administrativo para gestión de sistemas, catálogo TI, perfil profesional y sincronización NocoDB Cloud."
+    />
+    <meta property="og:type" content="website" />
+    <!-- Browser Tab Favicon (SVG + Fallback) -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2300c2b2'/%3E%3Cstop offset='100%25' stop-color='%232563eb'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M22 20L10 32l12 12M42 20l12 12-12 12M36 16l-8 32' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='50' cy='14' r='6' fill='%23ff7a00'/%3E%3C/svg%3E"
+    />
+    <link
+      rel="apple-touch-icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231d4ed8'/%3E%3Cpath d='M22 20L10 32l12 12M42 20l12 12-12 12M36 16l-8 32' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"
+    />
+    <!-- Google Fonts: Syne, Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      window.__EDUCOM_FORCE_ADMIN_PAGE__ = true;
+    </script>
+  </head>
+  <body class="bg-[#0b0e14] text-zinc-100 antialiased selection:bg-[#00c2b2]/30 selection:text-[#00c2b2]">
+    <div id="root"></div>
+
+    <!-- Standard Entry (Vite / Bundler) -->
+    <script type="module" src="/src/main.tsx" onerror="window.__bootEducomFallback && window.__bootEducomFallback()"></script>
+
+    <!-- Automatic Portable Fallback when opened as raw source in Cloudflare Pages, GitHub Pages, or local PC -->
+    <script>
+      (function () {
+        var booting = false;
+
+        function loadScript(src) {
+          return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.crossOrigin = 'anonymous';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        }
+
+        function resolvePath(base, rel) {
+          if (!rel.startsWith('.')) return rel;
+          var stack = base.split('/');
+          stack.pop();
+          var parts = rel.split('/');
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === '.') continue;
+            if (parts[i] === '..') stack.pop();
+            else stack.push(parts[i]);
+          }
+          return stack.join('/');
+        }
+
+        window.__bootEducomFallback = async function () {
+          if (booting || window.__EDUCOM_MOUNTED__) return;
+          var rootEl = document.getElementById('root');
+          if (rootEl && rootEl.children.length > 0) return;
+          booting = true;
+
+          try {
+            if (!window.TailwindLoaded) {
+              await loadScript('https://cdn.tailwindcss.com');
+              window.TailwindLoaded = true;
+            }
+
+            if (!window.Babel) {
+              await loadScript('https://unpkg.com/@babel/standalone@7.24.7/babel.min.js');
+            }
+
+            var filePaths = [
+              'firebase-applet-config.json',
+              'src/index.css',
+              'src/types.ts',
+              'src/data/portfolioData.ts',
+              'src/lib/firebase.ts',
+              'src/lib/firestoreService.ts',
+              'src/utils/exportStandaloneHtml.ts',
+              'src/components/ConstellationBackground.tsx',
+              'src/components/DigitalSignature.tsx',
+              'src/components/FloatingWhatsApp.tsx',
+              'src/components/Navbar.tsx',
+              'src/components/Hero.tsx',
+              'src/components/ProductShowcase.tsx',
+              'src/components/AboutSection.tsx',
+              'src/components/ContactSection.tsx',
+              'src/components/Footer.tsx',
+              'src/components/ProductDetailModal.tsx',
+              'src/components/AddProductModal.tsx',
+              'src/components/AdminLoginModal.tsx',
+              'src/components/AdminPanelModal.tsx',
+              'src/App.tsx',
+              'src/main.tsx'
+            ];
+
+            var sources = Object.assign({}, window.__PRELOADED_SOURCES__ || {});
+
+            await Promise.all(
+              filePaths.map(async function (p) {
+                if (sources[p]) return;
+                try {
+                  var res = await fetch('./' + p);
+                  if (res.ok) {
+                    var txt = await res.text();
+                    if (!txt.trim().startsWith('<!doctype html') && !txt.trim().startsWith('<html')) {
+                      sources[p] = txt;
+                    }
+                  }
+                } catch (e) {}
+              })
+            );
+
+            window.__RUNTIME_SOURCES__ = Object.assign({}, sources);
+
+            if (sources['src/index.css']) {
+              var cleanCss = sources['src/index.css']
+                .replace(/@import\s+["']tailwindcss["'];?/g, '')
+                .replace(/@theme\s*\{[\s\S]*?\}/g, '');
+              var styleTag = document.createElement('style');
+              styleTag.textContent = cleanCss;
+              document.head.appendChild(styleTag);
+            }
+
+            var importMap = {
+              imports: {
+                'react': 'https://esm.sh/react@19.0.0',
+                'react-dom': 'https://esm.sh/react-dom@19.0.0',
+                'react-dom/client': 'https://esm.sh/react-dom@19.0.0/client',
+                'react/jsx-runtime': 'https://esm.sh/react@19.0.0/jsx-runtime',
+                'lucide-react': 'https://esm.sh/lucide-react@0.469.0?external=react',
+                'firebase/app': 'https://esm.sh/firebase@11.1.0/app',
+                'firebase/firestore': 'https://esm.sh/firebase@11.1.0/firestore',
+                'firebase/auth': 'https://esm.sh/firebase@11.1.0/auth'
+              }
+            };
+
+            var externalModules = {};
+            var extKeys = Object.keys(importMap.imports);
+            await Promise.all(
+              extKeys.map(async function (k) {
+                try {
+                  externalModules[k] = await import(importMap.imports[k]);
+                } catch (e) {
+                  console.warn('No se pudo pre-cargar módulo externo:', k, e);
+                }
+              })
+            );
+
+            var compiledMap = {};
+            for (var i = 0; i < filePaths.length; i++) {
+              var path = filePaths[i];
+              if (!sources[path] || path.endsWith('.css')) continue;
+              if (path.endsWith('.json')) {
+                compiledMap[path] = 'module.exports = ' + sources[path] + ';';
+                continue;
+              }
+              var compiled = window.Babel.transform(sources[path], {
+                filename: path,
+                presets: [
+                  ['env', { modules: 'commonjs' }],
+                  ['react', { runtime: 'classic' }],
+                  'typescript'
+                ]
+              }).code;
+              compiledMap[path] = compiled;
+            }
+
+            var moduleCache = {};
+
+            function customRequire(fromFile, target) {
+              if (target.endsWith('?raw')) {
+                var rawTarget = target.slice(0, -4);
+                var rawResolved = resolvePath(fromFile, rawTarget);
+                return { default: sources[rawResolved] || '' };
+              }
+              if (target === 'react') {
+                var r = externalModules['react'];
+                return r && r.default ? Object.assign({}, r.default, r) : r;
+              }
+              if (target === 'react-dom/client') {
+                var rdc = externalModules['react-dom/client'];
+                return rdc && rdc.default ? Object.assign({}, rdc.default, rdc) : rdc;
+              }
+              if (externalModules[target]) {
+                return externalModules[target];
+              }
+
+              var resolved = resolvePath(fromFile, target);
+              var candidates = [
+                resolved,
+                resolved + '.ts',
+                resolved + '.tsx',
+                resolved + '/index.ts',
+                resolved + '/index.tsx'
+              ];
+              var foundKey = null;
+              for (var c = 0; c < candidates.length; c++) {
+                if (compiledMap[candidates[c]]) {
+                  foundKey = candidates[c];
+                  break;
+                }
+              }
+              if (!foundKey) {
+                throw new Error('Módulo no encontrado: ' + target + ' (desde ' + fromFile + ' -> ' + resolved + ')');
+              }
+
+              if (moduleCache[foundKey]) {
+                return moduleCache[foundKey].exports;
+              }
+
+              var mod = { exports: {} };
+              moduleCache[foundKey] = mod;
+
+              var ReactGlobal = externalModules['react']
+                ? externalModules['react'].default || externalModules['react']
+                : window.React;
+
+              var fn = new Function(
+                'require',
+                'module',
+                'exports',
+                'React',
+                compiledMap[foundKey]
+              );
+
+              fn(
+                function (dep) {
+                  return customRequire(foundKey, dep);
+                },
+                mod,
+                mod.exports,
+                ReactGlobal
+              );
+
+              return mod.exports;
+            }
+
+            window.__startEducomCommonJS = function () {
+              try {
+                customRequire('src/main.tsx', './main.tsx');
+              } catch (err) {
+                console.error('Error starting CommonJS bundle:', err);
+              }
+            };
+
+            window.__startEducomCommonJS();
+          } catch (err) {
+            console.error('Error iniciando modo portable:', err);
+          }
+        };
+
+        window.addEventListener('DOMContentLoaded', function () {
+          setTimeout(function () {
+            var rootEl = document.getElementById('root');
+            if (!window.__EDUCOM_MOUNTED__ && (!rootEl || rootEl.children.length === 0)) {
+              window.__bootEducomFallback();
+            }
+          }, 900);
+        });
+      })();
+    </script>
+  </body>
+</html>

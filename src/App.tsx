@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { ProductShowcase } from './components/ProductShowcase';
@@ -9,6 +9,7 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { AddProductModal } from './components/AddProductModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
+import { ConstellationBackground } from './components/ConstellationBackground';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import {
   getStoredProducts,
@@ -17,248 +18,366 @@ import {
   saveProfile,
   getStoredCategories,
   saveCategories,
+  setAdminPassword,
 } from './data/portfolioData';
 import {
   fetchProductsFromCloud,
-  saveProductToCloud,
-  syncAllProductsToCloud,
   fetchCategoriesFromCloud,
-  syncCategoriesToCloud,
   fetchProfileFromCloud,
+  fetchAdminPasswordFromCloud,
+  syncAllProductsToCloud,
+  syncCategoriesToCloud,
   saveProfileToCloud,
+  saveProductToCloud,
 } from './lib/firestoreService';
 import { ProductOrProject, UserProfile, ShowcaseCategory } from './types';
 
-export default function App() {
-  const [profile, setProfile] = useState<UserProfile>(() => getStoredProfile());
+const ADMIN_SESSION_KEY = 'educom_admin_logged_in_v4';
+
+function detectIsAdminRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  const win = window as any;
+  if (win.__EDUCOM_FORCE_ADMIN_PAGE__ === true) return true;
+  const path = window.location.pathname.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  return (
+    path.endsWith('/admin.html') ||
+    path.endsWith('/admin') ||
+    search.includes('page=admin') ||
+    hash === '#admin' ||
+    hash === '#/admin'
+  );
+}
+
+export function App() {
+  // Portfolio & Catalog State
   const [products, setProducts] = useState<ProductOrProject[]>(() => getStoredProducts());
+  const [profile, setProfile] = useState<UserProfile>(() => getStoredProfile());
   const [categories, setCategories] = useState<ShowcaseCategory[]>(() => getStoredCategories());
-  const [isCloudLoaded, setIsCloudLoaded] = useState(false);
+
+  // Selected product for detailed modal
   const [selectedProduct, setSelectedProduct] = useState<ProductOrProject | null>(null);
-  const [selectedProductForContact, setSelectedProductForContact] = useState<ProductOrProject | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Admin authentication and panel states
+  // Admin session & Page route state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('educom_admin_auth') === 'true';
+    try {
+      return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    } catch {
+      return false;
     }
-    return false;
   });
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [isAdminPageOpen, setIsAdminPageOpen] = useState<boolean>(() => detectIsAdminRoute());
+  const [cloudPassword, setCloudPassword] = useState<string | null>(null);
 
-  // Fetch latest cloud data on mount to ensure all visitors see worldwide up-to-date data
+  // Light / Dark Mode Theme State (Default: Dark mode as primary corporate technical look)
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('educom_theme_mode');
+      return saved ? saved === 'dark' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Listen to browser popstate / hashchange so admin.html / ?page=admin / #admin navigation works smoothly
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setIsAdminPageOpen(detectIsAdminRoute());
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const openAdminPage = useCallback(() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('page', 'admin');
+      window.history.pushState({ page: 'admin' }, '', url.toString());
+    } catch {
+      // Fallback if history pushState is restricted
+    }
+    setIsAdminPageOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const closeAdminPage = useCallback(() => {
+    const win = window as any;
+    const path = window.location.pathname.toLowerCase();
+    if (win.__EDUCOM_FORCE_ADMIN_PAGE__ === true || path.endsWith('/admin.html')) {
+      win.__EDUCOM_FORCE_ADMIN_PAGE__ = false;
+      try {
+        const target = path.endsWith('/admin.html')
+          ? window.location.pathname.replace(/admin\.html$/i, 'index.html')
+          : './index.html';
+        window.location.href = target;
+        return;
+      } catch {
+        // Fallback to in-place state switch
+      }
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('page');
+      if (url.hash.toLowerCase().includes('admin')) {
+        url.hash = '';
+      }
+      window.history.pushState({ page: 'home' }, '', url.toString());
+    } catch {
+      // Ignore
+    }
+    setIsAdminPageOpen(false);
+  }, []);
+
+  // Apply `.dark` class to `<html>`
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('educom_theme_mode', isDark ? 'dark' : 'light');
+    } catch {
+      // Ignore storage errors
+    }
+  }, [isDark]);
+
+  const toggleTheme = useCallback(() => {
+    setIsDark((prev) => !prev);
+  }, []);
+
+  // Cloud Synchronization (NocoDB Cloud Primary + Firestore Backup)
   useEffect(() => {
     let isMounted = true;
-
-    async function loadCloudData() {
+    (async () => {
       try {
-        const [cloudProducts, cloudCategories, cloudProfile] = await Promise.all([
+        const [cloudProducts, cloudCategories, cloudProfile, remotePass] = await Promise.all([
           fetchProductsFromCloud(),
           fetchCategoriesFromCloud(),
           fetchProfileFromCloud(),
+          fetchAdminPasswordFromCloud(),
         ]);
 
-        if (isMounted) {
-          if (cloudProducts && cloudProducts.length > 0) {
-            setProducts(cloudProducts);
-            saveProducts(cloudProducts);
-          }
-          if (cloudCategories && cloudCategories.length > 0) {
-            setCategories(cloudCategories);
-            saveCategories(cloudCategories);
-          }
-          if (cloudProfile && cloudProfile.name) {
-            setProfile(cloudProfile);
-            saveProfile(cloudProfile);
-          }
-          setIsCloudLoaded(true);
+        if (!isMounted) return;
+
+        if (cloudProducts && cloudProducts.length > 0) {
+          setProducts(cloudProducts);
+          saveProducts(cloudProducts);
+        }
+        if (cloudCategories && cloudCategories.length > 0) {
+          setCategories(cloudCategories);
+          saveCategories(cloudCategories);
+        }
+        if (cloudProfile && cloudProfile.name) {
+          setProfile(cloudProfile);
+          saveProfile(cloudProfile);
+        }
+        if (remotePass) {
+          setCloudPassword(remotePass);
+          setAdminPassword(remotePass);
         }
       } catch (err) {
-        console.warn('Could not sync initial data with cloud:', err);
+        console.warn('Initial cloud sync warning:', err);
       }
-    }
-
-    loadCloudData();
+    })();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('portfolio_theme');
-      if (saved) return saved === 'dark';
-      return false; // Default to fresh minimalist light theme
-    }
-    return false;
-  });
-
-  // Sync theme class with documentElement
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('portfolio_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('portfolio_theme', 'light');
-    }
-  }, [isDark]);
-
-  // Sync browser tab favicon and page title with profile brand configuration
-  useEffect(() => {
-    const faviconEl = document.getElementById('app-favicon') as HTMLLinkElement | null;
-    if (faviconEl) {
-      if (profile.brandLogo && profile.brandLogo.trim() !== '') {
-        faviconEl.href = profile.brandLogo;
-        faviconEl.removeAttribute('type');
-      } else {
-        faviconEl.href = './favicon.svg';
-        faviconEl.type = 'image/svg+xml';
+  // Scroll to section helper
+  const handleNavigate = useCallback(
+    (sectionId: string) => {
+      if (isAdminPageOpen) {
+        closeAdminPage();
+        setTimeout(() => {
+          const el = document.getElementById(sectionId);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 120);
+        return;
       }
-    }
-  }, [profile.brandLogo]);
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    },
+    [isAdminPageOpen, closeAdminPage]
+  );
 
-  const handleToggleTheme = () => {
-    setIsDark((prev) => !prev);
-  };
-
-  const handleAddProduct = (newProd: ProductOrProject) => {
-    const updated = [newProd, ...products];
-    setProducts(updated);
-    saveProducts(updated);
-    saveProductToCloud(newProd).catch((e) => console.error('Cloud save error:', e));
-  };
+  // Pre-filled consultation jump to Contact form
+  const [preselectedInquiry, setPreselectedInquiry] = useState<string>('');
 
   const handleContactProduct = (product: ProductOrProject) => {
-    setSelectedProductForContact(product);
-    const contactEl = document.getElementById('contact');
-    if (contactEl) {
-      contactEl.scrollIntoView({ behavior: 'smooth' });
-    }
+    setSelectedProduct(null);
+    setPreselectedInquiry(`Cotización / Demo: ${product.title}`);
+    handleNavigate('contact');
   };
 
-  // Open Admin Flow: If logged in, open panel; otherwise, open login modal
-  const handleOpenAdminAuthOrPanel = () => {
-    if (isAdminLoggedIn) {
-      setIsAdminPanelOpen(true);
-    } else {
-      setIsLoginModalOpen(true);
-    }
+  // Add Product Handler
+  const handleAddProduct = (newProduct: ProductOrProject) => {
+    const updated = [newProduct, ...products];
+    setProducts(updated);
+    saveProducts(updated);
+    saveProductToCloud(newProduct);
   };
 
-  const handleLoginSuccess = () => {
-    setIsAdminLoggedIn(true);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('educom_admin_auth', 'true');
-    }
-    setIsLoginModalOpen(false);
-    setIsAdminPanelOpen(true);
+  // Admin Update Handlers
+  const handleUpdateProducts = (updatedProducts: ProductOrProject[]) => {
+    setProducts(updatedProducts);
+    saveProducts(updatedProducts);
+    syncAllProductsToCloud(updatedProducts);
   };
 
-  const handleLogout = () => {
+  const handleUpdateCategories = (updatedCategories: ShowcaseCategory[]) => {
+    setCategories(updatedCategories);
+    saveCategories(updatedCategories);
+    syncCategoriesToCloud(updatedCategories);
+  };
+
+  const handleUpdateProfile = (updatedProfile: UserProfile) => {
+    setProfile(updatedProfile);
+    saveProfile(updatedProfile);
+    saveProfileToCloud(updatedProfile);
+  };
+
+  const handleAdminLogout = () => {
+    try {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch {
+      // Ignore
+    }
     setIsAdminLoggedIn(false);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('educom_admin_auth');
-    }
-    setIsAdminPanelOpen(false);
+    closeAdminPage();
   };
+
+  // Dedicated Full-Page Admin Route (`admin.html` / `?page=admin`)
+  if (isAdminPageOpen) {
+    return (
+      <AdminPanelModal
+        isOpen={true}
+        isFullPage={true}
+        isAuthenticated={isAdminLoggedIn}
+        cloudPassword={cloudPassword}
+        onLoginSuccess={() => {
+          try {
+            sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+          } catch {
+            // Ignore
+          }
+          setIsAdminLoggedIn(true);
+        }}
+        onClose={closeAdminPage}
+        products={products}
+        categories={categories}
+        profile={profile}
+        onUpdateProducts={handleUpdateProducts}
+        onUpdateCategories={handleUpdateCategories}
+        onUpdateProfile={handleUpdateProfile}
+        onLogout={handleAdminLogout}
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans selection:bg-[#2563eb] selection:text-white transition-colors duration-200">
-      {/* Navigation */}
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0c101b] text-slate-900 dark:text-slate-100 relative selection:bg-[#2563eb] selection:text-white transition-colors duration-300">
+      {/* Subtle Ambient Background */}
+      <ConstellationBackground />
+
+      {/* Top Sticky Navbar */}
       <Navbar
-        profile={profile}
-        isDark={isDark}
-        onToggleTheme={handleToggleTheme}
-        onOpenAddModal={() => setIsAddModalOpen(true)}
+        onNavigate={handleNavigate}
         isAdminLoggedIn={isAdminLoggedIn}
-        onOpenAdminAuthOrPanel={handleOpenAdminAuthOrPanel}
+        onOpenAdminLogin={() => openAdminPage()}
+        onOpenAdminPanel={() => openAdminPage()}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        avatarUrl={profile.avatarUrl}
       />
 
-      {/* Main Content Sections */}
-      <main>
+      {/* Main Single-Page Scrollable Content */}
+      <main className="flex-1 relative z-10">
+        {/* 1. Hero Section */}
         <Hero
           profile={profile}
-          totalProductsCount={products.length}
-          isDark={isDark}
+          products={products}
+          onExploreClick={() => handleNavigate('showcase')}
+          onContactClick={() => handleNavigate('contact')}
+          onSelectProduct={(p) => setSelectedProduct(p)}
         />
 
+        {/* 2. Product & Systems Catalog */}
         <ProductShowcase
           products={products}
           categories={categories}
-          onSelectProduct={(product) => setSelectedProduct(product)}
+          onSelectProduct={(p) => setSelectedProduct(p)}
           onOpenAddModal={() => setIsAddModalOpen(true)}
           onContactProduct={handleContactProduct}
           isAdminLoggedIn={isAdminLoggedIn}
-          onOpenAdminPanel={handleOpenAdminAuthOrPanel}
+          onOpenAdminPanel={() => openAdminPage()}
         />
 
+        {/* 3. About Me, Experience & Technical Stack */}
         <AboutSection profile={profile} />
 
+        {/* 4. Direct Contact & Inquiry Form */}
         <ContactSection
           profile={profile}
-          selectedProductForContact={selectedProductForContact}
-          onClearSelectedProduct={() => setSelectedProductForContact(null)}
+          initialSubject={preselectedInquiry}
         />
       </main>
 
       {/* Footer */}
-      <Footer profile={profile} />
+      <Footer
+        profile={profile}
+        onNavigate={handleNavigate}
+        isAdminLoggedIn={isAdminLoggedIn}
+        onOpenAdminLogin={() => openAdminPage()}
+        onOpenAdminPanel={() => openAdminPage()}
+      />
 
-      {/* Floating WhatsApp Quick Action Button */}
+      {/* Floating WhatsApp Direct Chat Button */}
       <FloatingWhatsApp profile={profile} />
 
-      {/* Modals */}
+      {/* Product Detail Modal */}
       <ProductDetailModal
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onContactProduct={handleContactProduct}
       />
 
+      {/* Add New Product Modal (Admin quick action) */}
       <AddProductModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAddProduct={handleAddProduct}
       />
 
-      {/* Admin Authentication & Management Modals */}
+      {/* Admin Login Modal */}
       <AdminLoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
-      />
-
-      <AdminPanelModal
-        isOpen={isAdminPanelOpen}
-        onClose={() => setIsAdminPanelOpen(false)}
-        products={products}
-        categories={categories}
-        profile={profile}
-        onUpdateProducts={(newProducts) => {
-          setProducts(newProducts);
-          saveProducts(newProducts);
-          if (selectedProduct) {
-            const refreshed = newProducts.find((p) => p.id === selectedProduct.id);
-            setSelectedProduct(refreshed || null);
+        isOpen={isAdminLoginOpen}
+        onClose={() => setIsAdminLoginOpen(false)}
+        onLoginSuccess={() => {
+          try {
+            sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+          } catch {
+            // Ignore
           }
-          syncAllProductsToCloud(newProducts).catch((e) => console.error('Cloud products sync error:', e));
+          setIsAdminLoggedIn(true);
+          setIsAdminLoginOpen(false);
+          openAdminPage();
         }}
-        onUpdateCategories={(newCategories) => {
-          setCategories(newCategories);
-          saveCategories(newCategories);
-          syncCategoriesToCloud(newCategories).catch((e) => console.error('Cloud categories sync error:', e));
-        }}
-        onUpdateProfile={(newProfile) => {
-          setProfile(newProfile);
-          saveProfile(newProfile);
-          saveProfileToCloud(newProfile).catch((e) => console.error('Cloud profile sync error:', e));
-        }}
-        onLogout={handleLogout}
       />
     </div>
   );
 }
 
+export default App;

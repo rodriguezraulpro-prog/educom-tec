@@ -1,4 +1,5 @@
 import rawIndexHtml from '../../index.html?raw';
+import rawAdminHtml from '../../admin.html?raw';
 import rawConfigJson from '../../firebase-applet-config.json?raw';
 import rawIndexCss from '../index.css?raw';
 import rawTypes from '../types.ts?raw';
@@ -22,16 +23,17 @@ import rawApp from '../App.tsx?raw';
 import rawMain from '../main.tsx?raw';
 
 const SELF_EXPORT_MODULE_SOURCE = `
-export async function downloadStandaloneHtml(): Promise<void> {
+export async function downloadStandaloneHtml(targetFile: 'index.html' | 'admin.html' = 'index.html'): Promise<void> {
   const win = window as any;
   const sourcesMap = win.__RUNTIME_SOURCES__ || win.__PRELOADED_SOURCES__ || {};
-  const rawHtml = sourcesMap['index.html'] || document.documentElement.outerHTML;
+  const rawHtml = sourcesMap[targetFile] || sourcesMap['index.html'] || document.documentElement.outerHTML;
   const serializedSources = JSON.stringify(sourcesMap).replace(/<\\/script>/gi, '<\\\\/script>');
   let cleanHtml = rawHtml
     .replace(/<script\\s+type="module"\\s+src="\\/@vite\\/client"><\\/script>\\s*/gi, '')
     .replace(/<script[^>]*src="\\/_aistudio-iframe\\.js[^"]*"[^>]*><\\/script>\\s*/gi, '')
     .replace(/<script\\s+id="educom-preloaded-sources">[\\s\\S]*?<\\/script>\\s*/gi, '');
-  const preloadScript = '<script id="educom-preloaded-sources">window.__PRELOADED_SOURCES__ = ' + serializedSources + ';</script>\\n  </head>';
+  const forceAdminTag = targetFile === 'admin.html' ? 'window.__EDUCOM_FORCE_ADMIN_PAGE__ = true;' : '';
+  const preloadScript = '<script id="educom-preloaded-sources">' + forceAdminTag + 'window.__PRELOADED_SOURCES__ = ' + serializedSources + ';</script>\\n  </head>';
   if (cleanHtml.includes('</head>')) {
     cleanHtml = cleanHtml.replace('</head>', () => preloadScript);
   } else {
@@ -41,16 +43,20 @@ export async function downloadStandaloneHtml(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'index.html';
+  a.download = targetFile;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
+export async function downloadStandaloneAdminHtml(): Promise<void> {
+  return downloadStandaloneHtml('admin.html');
+}
 `;
 
 const STATIC_RAW_SOURCES: Record<string, string> = {
   'index.html': rawIndexHtml,
+  'admin.html': rawAdminHtml,
   'firebase-applet-config.json': rawConfigJson,
   'src/index.css': rawIndexCss,
   'src/types.ts': rawTypes,
@@ -76,15 +82,12 @@ const STATIC_RAW_SOURCES: Record<string, string> = {
 };
 
 /**
- * Generates and downloads a 100% self-contained `index.html` file
+ * Generates and downloads a 100% self-contained `index.html` or `admin.html` file
  * using genuine raw TypeScript/TSX sources (never Vite dev-transformed code).
- * Works everywhere:
- * - Double-clicking locally on PC (`file://`)
- * - Uploading directly to Cloudflare Pages (`educom-tec.pages.dev`)
- * - Publishing on GitHub Pages (`username.github.io/repo`)
- * - Deploying on Netlify
  */
-export async function downloadStandaloneHtml(): Promise<void> {
+export async function downloadStandaloneHtml(
+  targetFile: 'index.html' | 'admin.html' = 'index.html'
+): Promise<void> {
   const win = window as any;
   const runtimeSources = win.__RUNTIME_SOURCES__ || win.__PRELOADED_SOURCES__ || {};
 
@@ -112,6 +115,7 @@ export async function downloadStandaloneHtml(): Promise<void> {
       'educom_profile_v4',
       'educom_categories_v4',
       'educom_admin_password_v4',
+      'educom_nocodb_config_v1',
     ];
     for (const k of keys) {
       const val = localStorage.getItem(k);
@@ -124,7 +128,10 @@ export async function downloadStandaloneHtml(): Promise<void> {
   const serializedSources = JSON.stringify(sourcesMap).replace(/<\/script>/gi, '<\\/script>');
   const serializedSnapshot = JSON.stringify(localSnapshot).replace(/<\/script>/gi, '<\\/script>');
 
-  const baseHtml = sourcesMap['index.html'] || rawIndexHtml;
+  const baseHtml =
+    targetFile === 'admin.html'
+      ? sourcesMap['admin.html'] || rawAdminHtml
+      : sourcesMap['index.html'] || rawIndexHtml;
 
   // Strip any Vite client, AI Studio iframe helper, or older preloaded script block
   let cleanHtml = baseHtml
@@ -133,15 +140,18 @@ export async function downloadStandaloneHtml(): Promise<void> {
     .replace(/<script\s+id="educom-preloaded-sources">[\s\S]*?<\/script>\s*/gi, '')
     .replace(/<script>window\.__PRELOADED_SOURCES__\s*=[\s\S]*?<\/script>\s*/gi, '');
 
+  const forceAdminFlag =
+    targetFile === 'admin.html' ? 'window.__EDUCOM_FORCE_ADMIN_PAGE__ = true;' : '';
+
   const preloadScript =
     `<script id="educom-preloaded-sources">` +
+    forceAdminFlag +
     `window.__PRELOADED_SOURCES__ = ${serializedSources};` +
     `window.__PRELOADED_LOCALSTORAGE__ = ${serializedSnapshot};` +
     `try { var snap = window.__PRELOADED_LOCALSTORAGE__ || {}; for (var k in snap) { if (!localStorage.getItem(k)) localStorage.setItem(k, snap[k]); } } catch(e) {}` +
     `</script>\n  </head>`;
 
   if (cleanHtml.includes('</head>')) {
-    // IMPORTANT: Use a replacement function `() => preloadScript` so `$` patterns inside source code are never mutated!
     cleanHtml = cleanHtml.replace('</head>', () => preloadScript);
   } else {
     cleanHtml = preloadScript + cleanHtml;
@@ -151,9 +161,13 @@ export async function downloadStandaloneHtml(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'index.html';
+  a.download = targetFile;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+export async function downloadStandaloneAdminHtml(): Promise<void> {
+  return downloadStandaloneHtml('admin.html');
 }

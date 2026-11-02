@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   ShieldCheck,
@@ -17,10 +17,6 @@ import {
   LogOut,
   CheckCircle,
   ExternalLink,
-  HelpCircle,
-  Tag,
-  AlertTriangle,
-  Camera,
   Upload,
   Check,
   MessageCircle,
@@ -30,6 +26,22 @@ import {
   Youtube,
   Twitter,
   Download,
+  LayoutDashboard,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  Copy,
+  Database,
+  RefreshCw,
+  ArrowLeft,
+  Lock,
+  Eye,
+  EyeOff,
+  FileJson,
+  GraduationCap,
+  Award,
+  AlertTriangle,
+  Menu,
 } from 'lucide-react';
 import {
   ProductOrProject,
@@ -45,6 +57,7 @@ import {
   resetPortfolioData,
 } from '../data/portfolioData';
 import {
+  fetchAdminPasswordFromCloud,
   saveAdminPasswordToCloud,
   deleteProductFromCloud,
   getNocoDBConfig,
@@ -54,7 +67,10 @@ import {
   saveProfileToCloud,
   NocoDBConfig,
 } from '../lib/firestoreService';
-import { downloadStandaloneHtml } from '../utils/exportStandaloneHtml';
+import {
+  downloadStandaloneHtml,
+  downloadStandaloneAdminHtml,
+} from '../utils/exportStandaloneHtml';
 
 async function compressImageFile(file: File, maxWidth = 1280, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -97,15 +113,20 @@ interface AdminPanelModalProps {
   onUpdateCategories: (categories: ShowcaseCategory[]) => void;
   onUpdateProfile: (profile: UserProfile) => void;
   onLogout: () => void;
+  isFullPage?: boolean;
+  isAuthenticated?: boolean;
+  cloudPassword?: string | null;
+  onLoginSuccess?: () => void;
 }
 
 type AdminTab =
+  | 'dashboard'
   | 'products'
   | 'categories'
   | 'profile'
-  | 'contact'
-  | 'experience'
   | 'skills'
+  | 'experience'
+  | 'contact'
   | 'security';
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -118,14 +139,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateCategories,
   onUpdateProfile,
   onLogout,
+  isFullPage = true,
+  isAuthenticated = true,
+  cloudPassword = null,
+  onLoginSuccess,
 }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('products');
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Full-page Login Gate state
+  const [loginInput, setLoginInput] = useState('');
+  const [showLoginPass, setShowLoginPass] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Local draft states
   const [draftProducts, setDraftProducts] = useState<ProductOrProject[]>(products);
   const [draftCategories, setDraftCategories] = useState<ShowcaseCategory[]>(categories);
   const [draftProfile, setDraftProfile] = useState<UserProfile>(profile);
+
+  // Catalog filter & search inside Admin
+  const [adminSearch, setAdminSearch] = useState('');
+  const [adminCatFilter, setAdminCatFilter] = useState<string>('all');
 
   // Editing product state
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -151,28 +186,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [expForm, setExpForm] = useState({ role: '', company: '', period: '', description: '' });
   const [isAddingExp, setIsAddingExp] = useState(false);
 
-  // Skill category editing
+  // Skill category & certifications editing
   const [newSkillCatName, setNewSkillCatName] = useState('');
   const [newSkillItem, setNewSkillItem] = useState<{ catIdx: number; text: string }>({ catIdx: -1, text: '' });
   const [editingSkillCatIdx, setEditingSkillCatIdx] = useState<number | null>(null);
   const [editingSkillCatName, setEditingSkillCatName] = useState('');
+  const [newCertText, setNewCertText] = useState('');
+  const [eduForm, setEduForm] = useState({ degree: '', institution: '', year: '' });
 
   // Contact & Socials state
   const [whatsappPhone, setWhatsappPhone] = useState(profile.whatsappNumber || '');
   const [whatsappMessage, setWhatsappMessage] = useState('Hola Raul, deseo consultar por servicios de Educom-Tec.');
   const [newSocialName, setNewSocialName] = useState('');
   const [newSocialUrl, setNewSocialUrl] = useState('');
-  const [newSocialIcon, setNewSocialIcon] = useState('Globe');
   const [isAddingSocial, setIsAddingSocial] = useState(false);
 
-  // Synchronize when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setDraftProducts(products);
       setDraftCategories(categories);
       setDraftProfile(profile);
 
-      // Resolve initial phone number from profile or wa.me URL
       let initialPhone = profile.whatsappNumber || '';
       if (!initialPhone && profile.whatsapp) {
         const match = profile.whatsapp.match(/wa\.me\/([0-9+]+)/);
@@ -191,11 +225,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           }
         }
       }
-
       setWhatsappPhone(initialPhone);
-      setToastMessage(null);
     }
   }, [isOpen, products, categories, profile]);
+
+  const filteredAdminProducts = useMemo(() => {
+    return draftProducts.filter((p) => {
+      const matchesCat = adminCatFilter === 'all' || p.category === adminCatFilter;
+      const q = adminSearch.trim().toLowerCase();
+      const matchesQuery =
+        !q ||
+        p.title.toLowerCase().includes(q) ||
+        p.subtitle.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        (p.tags || []).some((t) => t.toLowerCase().includes(q));
+      return matchesCat && matchesQuery;
+    });
+  }, [draftProducts, adminCatFilter, adminSearch]);
 
   if (!isOpen) return null;
 
@@ -203,13 +249,134 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 3500);
+    }, 3800);
   };
+
+  // ----------------------------------------------------
+  // FULL-PAGE ADMIN LOGIN SCREEN (When visiting admin.html unauthenticated)
+  // ----------------------------------------------------
+  const handleAdminPageLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    const trimmed = loginInput.trim();
+    try {
+      const remotePass = cloudPassword || (await fetchAdminPasswordFromCloud());
+      const actualPass = (remotePass || getAdminPassword()).trim();
+      if (trimmed === actualPass) {
+        setLoginInput('');
+        if (onLoginSuccess) onLoginSuccess();
+      } else {
+        setLoginError('Contraseña incorrecta. Verifica tu clave de administrador.');
+      }
+    } catch {
+      if (trimmed === getAdminPassword().trim()) {
+        setLoginInput('');
+        if (onLoginSuccess) onLoginSuccess();
+      } else {
+        setLoginError('Contraseña incorrecta. Verifica tu clave de administrador.');
+      }
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen w-full bg-[#0b0e14] text-zinc-100 flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
+        <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-[#0b0e14] shadow-lg">
+              <ShieldCheck className="w-6 h-6 stroke-[2.2]" />
+            </div>
+            <div>
+              <span className="text-base font-bold font-syne text-white tracking-tight block">
+                Educom-Tec // Admin Center
+              </span>
+              <span className="text-[11px] font-mono text-zinc-400 block">
+                admin.html • consola de gestión y base de datos NocoDB
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#161b22] hover:bg-[#1f2630] border border-[#2d3542] text-xs font-mono text-zinc-300 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Volver a la Web Pública (index.html)</span>
+          </button>
+        </div>
+
+        <div className="max-w-md w-full mx-auto my-auto py-12">
+          <div className="p-7 sm:p-8 rounded-3xl bg-[#12161f] border border-[#262d3a] shadow-2xl space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[#00c2b2] flex items-center justify-center mx-auto mb-3">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h1 className="text-2xl font-bold font-syne text-white tracking-tight">
+                Acceso al Panel Admin
+              </h1>
+              <p className="text-xs font-mono text-zinc-400">
+                Ingresa tu clave administrativa para gestionar el catálogo de sistemas, perfil y base de datos NocoDB.
+              </p>
+            </div>
+
+            <form onSubmit={handleAdminPageLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-bold text-zinc-300 uppercase mb-1.5">
+                  Contraseña de Administrador
+                </label>
+                <div className="relative">
+                  <input
+                    type={showLoginPass ? 'text' : 'password'}
+                    value={loginInput}
+                    onChange={(e) => setLoginInput(e.target.value)}
+                    placeholder="Ingresa tu contraseña..."
+                    autoFocus
+                    className="w-full pl-4 pr-11 py-3 rounded-xl bg-[#0b0e14] border border-[#2d3542] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPass(!showLoginPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                  >
+                    {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="p-3 rounded-xl bg-red-950/50 border border-red-800/60 text-xs font-mono text-red-300">
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3 px-5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-lg transition-all cursor-pointer"
+              >
+                Ingresar al Centro de Control
+              </button>
+            </form>
+
+            <div className="pt-4 border-t border-[#262d3a] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+              <span>NocoDB Base: {nocoConfig.baseId}</span>
+              <span className="text-[#00c2b2]">● Cloud Ready</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl w-full mx-auto text-center text-xs font-mono text-zinc-500">
+          Educom-Tec — Soluciones Informáticas & Sistemas • Raúl Eduardo Rodríguez
+        </div>
+      </div>
+    );
+  }
 
   // ----------------------------------------------------
   // PRODUCTS LOGIC
   // ----------------------------------------------------
   const handleStartEditProduct = (prod: ProductOrProject) => {
+    setActiveTab('products');
     setEditingProductId(prod.id);
     setProductForm({
       ...prod,
@@ -220,6 +387,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   const handleStartCreateProduct = () => {
+    setActiveTab('products');
     setIsCreatingProduct(true);
     setEditingProductId('new');
     setNewGalleryUrl('');
@@ -242,6 +410,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       year: new Date().getFullYear().toString(),
       demoUrl: '',
     });
+  };
+
+  const handleDuplicateProduct = (prod: ProductOrProject) => {
+    const copy: ProductOrProject = {
+      ...prod,
+      id: `sys-${Date.now()}`,
+      title: `${prod.title} (Copia)`,
+    };
+    const updatedList = [copy, ...draftProducts];
+    setDraftProducts(updatedList);
+    saveProducts(updatedList);
+    onUpdateProducts(updatedList);
+    showToast(`Sistema "${prod.title}" duplicado correctamente.`);
+  };
+
+  const handleMoveProduct = (id: string, direction: 'up' | 'down') => {
+    const idx = draftProducts.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= draftProducts.length) return;
+    const copy = [...draftProducts];
+    const [moved] = copy.splice(idx, 1);
+    copy.splice(targetIdx, 0, moved);
+    setDraftProducts(copy);
+    saveProducts(copy);
+    onUpdateProducts(copy);
+    showToast('Orden del catálogo actualizado.');
   };
 
   const handleSaveProductForm = () => {
@@ -298,7 +493,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     onUpdateProducts(updatedList);
     setEditingProductId(null);
     setIsCreatingProduct(false);
-    showToast('¡Sistema guardado y sincronizado exitosamente!');
+    showToast('¡Sistema guardado y sincronizado con NocoDB Cloud!');
   };
 
   const handleDeleteProduct = (id: string, title: string) => {
@@ -310,7 +505,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (editingProductId === id) {
       setEditingProductId(null);
     }
-    showToast(`Producto "${title}" eliminado del catálogo.`);
+    showToast(`Sistema "${title}" eliminado del catálogo.`);
   };
 
   // ----------------------------------------------------
@@ -336,7 +531,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     onUpdateCategories(updated);
     setNewCatId('');
     setNewCatLabel('');
-    showToast('¡Nueva categoría añadida al catálogo!');
+    showToast('¡Nueva categoría añadida y sincronizada!');
   };
 
   const handleUpdateCategoryLabel = (id: string, newLabel: string) => {
@@ -362,10 +557,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // PROFILE / ABOUT ME LOGIC
   // ----------------------------------------------------
   const handleSaveProfile = () => {
-    setDraftProfile(draftProfile);
     saveProfile(draftProfile);
     onUpdateProfile(draftProfile);
-    showToast('¡Información de perfil actualizada con éxito!');
+    showToast('¡Información de perfil actualizada y sincronizada!');
   };
 
   // ----------------------------------------------------
@@ -420,16 +614,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         }`;
       }
     }
-    const newEntry = {
-      name: name.trim(),
-      url: formattedUrl,
-      icon,
-    };
-    const updatedSocials = [...draftProfile.socials, newEntry];
-    const updated: UserProfile = {
-      ...draftProfile,
-      socials: updatedSocials,
-    };
+    const updatedSocials = [...draftProfile.socials, { name: name.trim(), url: formattedUrl, icon }];
+    const updated: UserProfile = { ...draftProfile, socials: updatedSocials };
     setDraftProfile(updated);
     saveProfile(updated);
     onUpdateProfile(updated);
@@ -442,10 +628,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const handleDeleteSocialNetwork = (index: number) => {
     const target = draftProfile.socials[index];
     const updatedSocials = draftProfile.socials.filter((_, i) => i !== index);
-    const updated: UserProfile = {
-      ...draftProfile,
-      socials: updatedSocials,
-    };
+    const updated: UserProfile = { ...draftProfile, socials: updatedSocials };
     setDraftProfile(updated);
     saveProfile(updated);
     onUpdateProfile(updated);
@@ -457,7 +640,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // ----------------------------------------------------
   const handleSaveExperience = () => {
     if (!expForm.role || !expForm.company) {
-      alert('Debes indicar al menos el rol y la empresa.');
+      showToast('Debes indicar al menos el rol y la empresa.');
       return;
     }
 
@@ -468,11 +651,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       updatedExp[editingExpIdx] = expForm;
     }
 
-    const updatedProfile: UserProfile = {
-      ...draftProfile,
-      experience: updatedExp,
-    };
-
+    const updatedProfile: UserProfile = { ...draftProfile, experience: updatedExp };
     setDraftProfile(updatedProfile);
     saveProfile(updatedProfile);
     onUpdateProfile(updatedProfile);
@@ -483,10 +662,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const handleDeleteExperience = (index: number) => {
     const updatedExp = draftProfile.experience.filter((_, i) => i !== index);
-    const updatedProfile: UserProfile = {
-      ...draftProfile,
-      experience: updatedExp,
-    };
+    const updatedProfile: UserProfile = { ...draftProfile, experience: updatedExp };
     setDraftProfile(updatedProfile);
     saveProfile(updatedProfile);
     onUpdateProfile(updatedProfile);
@@ -494,14 +670,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // ----------------------------------------------------
-  // SKILLS LOGIC
+  // SKILLS, EDUCATION & CERTIFICATIONS LOGIC
   // ----------------------------------------------------
   const handleAddSkillCategory = () => {
     if (!newSkillCatName.trim()) return;
-    const updatedSkills = [
-      ...draftProfile.skills,
-      { category: newSkillCatName.trim(), items: [] },
-    ];
+    const updatedSkills = [...draftProfile.skills, { category: newSkillCatName.trim(), items: [] }];
     const updated = { ...draftProfile, skills: updatedSkills };
     setDraftProfile(updated);
     saveProfile(updated);
@@ -512,16 +685,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const handleAddSkillItem = (catIdx: number) => {
     if (!newSkillItem.text.trim()) return;
-    const updatedSkills = draftProfile.skills.map((group, idx) => {
-      if (idx === catIdx) {
-        return {
-          ...group,
-          items: [...group.items, newSkillItem.text.trim()],
-        };
-      }
-      return group;
-    });
-
+    const updatedSkills = draftProfile.skills.map((group, idx) =>
+      idx === catIdx ? { ...group, items: [...group.items, newSkillItem.text.trim()] } : group
+    );
     const updated = { ...draftProfile, skills: updatedSkills };
     setDraftProfile(updated);
     saveProfile(updated);
@@ -530,16 +696,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   const handleRemoveSkillItem = (catIdx: number, itemIdx: number) => {
-    const updatedSkills = draftProfile.skills.map((group, idx) => {
-      if (idx === catIdx) {
-        return {
-          ...group,
-          items: group.items.filter((_, i) => i !== itemIdx),
-        };
-      }
-      return group;
-    });
-
+    const updatedSkills = draftProfile.skills.map((group, idx) =>
+      idx === catIdx ? { ...group, items: group.items.filter((_, i) => i !== itemIdx) } : group
+    );
     const updated = { ...draftProfile, skills: updatedSkills };
     setDraftProfile(updated);
     saveProfile(updated);
@@ -559,19 +718,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     showToast('Categoría de habilidades eliminada.');
   };
 
-  const handleStartEditSkillCategory = (catIdx: number, currentName: string) => {
-    setEditingSkillCatIdx(catIdx);
-    setEditingSkillCatName(currentName);
-  };
-
   const handleSaveSkillCategoryName = (catIdx: number) => {
     if (!editingSkillCatName.trim()) return;
-    const updatedSkills = draftProfile.skills.map((group, idx) => {
-      if (idx === catIdx) {
-        return { ...group, category: editingSkillCatName.trim() };
-      }
-      return group;
-    });
+    const updatedSkills = draftProfile.skills.map((group, idx) =>
+      idx === catIdx ? { ...group, category: editingSkillCatName.trim() } : group
+    );
     const updated = { ...draftProfile, skills: updatedSkills };
     setDraftProfile(updated);
     saveProfile(updated);
@@ -582,33 +733,94 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // ----------------------------------------------------
-  // SECURITY & RESET LOGIC
+  // SECURITY, SYNC & JSON BACKUP LOGIC
   // ----------------------------------------------------
+  const handleManualNocoSync = async () => {
+    setIsSyncingNoco(true);
+    try {
+      saveNocoDBConfig(nocoConfig);
+      await Promise.all([
+        syncAllProductsToCloud(draftProducts),
+        syncCategoriesToCloud(draftCategories),
+        saveProfileToCloud(draftProfile),
+      ]);
+      showToast('¡Sincronización completa con NocoDB Cloud exitosa!');
+    } catch {
+      showToast('Error al sincronizar con NocoDB. Verifica la conexión.');
+    } finally {
+      setIsSyncingNoco(false);
+    }
+  };
+
+  const handleExportJsonBackup = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      products: draftProducts,
+      categories: draftCategories,
+      profile: draftProfile,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `educom-tec-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('Respaldo JSON descargado exitosamente.');
+  };
+
+  const handleImportJsonBackup = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        if (Array.isArray(parsed.products)) {
+          setDraftProducts(parsed.products);
+          saveProducts(parsed.products);
+          onUpdateProducts(parsed.products);
+        }
+        if (Array.isArray(parsed.categories)) {
+          setDraftCategories(parsed.categories);
+          saveCategories(parsed.categories);
+          onUpdateCategories(parsed.categories);
+        }
+        if (parsed.profile && typeof parsed.profile === 'object') {
+          setDraftProfile(parsed.profile);
+          saveProfile(parsed.profile);
+          onUpdateProfile(parsed.profile);
+        }
+        showToast('¡Respaldo JSON importado y aplicado correctamente!');
+      } catch {
+        showToast('El archivo JSON seleccionado no tiene un formato válido.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
-
     if (newPassword.length < 4) {
       setPasswordError('La contraseña debe tener al menos 4 caracteres.');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setPasswordError('Las contraseñas no coinciden.');
       return;
     }
-
     setAdminPassword(newPassword);
     saveAdminPasswordToCloud(newPassword).catch((e) => console.error('Cloud password error:', e));
     setNewPassword('');
     setConfirmPassword('');
-    showToast('¡Contraseña de administrador actualizada en la nube y localmente!');
+    showToast('¡Contraseña de administrador actualizada en NocoDB Cloud y localmente!');
   };
 
   const handleResetFactory = () => {
     if (
       window.confirm(
-        '⚠️ ATENCIÓN: ¿Deseas restablecer todos los datos, productos y perfiles a la versión inicial de fábrica de Educom-Tec? Se borrarán tus cambios personalizados guardados en este navegador.'
+        '⚠️ ATENCIÓN: ¿Deseas restablecer todos los datos, productos y perfiles a la versión inicial de fábrica de Educom-Tec?'
       )
     ) {
       const reset = resetPortfolioData();
@@ -622,79 +834,173 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
+  const navItems: { id: AdminTab; label: string; badge?: string | number; icon: React.ReactNode; group: string }[] = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard General',
+      icon: <LayoutDashboard className="w-4 h-4" />,
+      group: 'CENTRO DE CONTROL',
+    },
+    {
+      id: 'products',
+      label: 'Catálogo de Sistemas',
+      badge: draftProducts.length,
+      icon: <Package className="w-4 h-4" />,
+      group: 'CATÁLOGO COMERCIAL',
+    },
+    {
+      id: 'categories',
+      label: 'Categorías & Filtros',
+      badge: draftCategories.length,
+      icon: <Layers className="w-4 h-4" />,
+      group: 'CATÁLOGO COMERCIAL',
+    },
+    {
+      id: 'profile',
+      label: 'Perfil, Foto & Hero',
+      icon: <User className="w-4 h-4" />,
+      group: 'MARCA & PORTAFOLIO',
+    },
+    {
+      id: 'skills',
+      label: 'Stack TI & Certificaciones',
+      badge: draftProfile.skills.length,
+      icon: <Wrench className="w-4 h-4" />,
+      group: 'MARCA & PORTAFOLIO',
+    },
+    {
+      id: 'experience',
+      label: 'Experiencia Laboral',
+      badge: draftProfile.experience.length,
+      icon: <Briefcase className="w-4 h-4" />,
+      group: 'MARCA & PORTAFOLIO',
+    },
+    {
+      id: 'contact',
+      label: 'Contacto, WhatsApp & Redes',
+      badge: draftProfile.socials.length,
+      icon: <Phone className="w-4 h-4" />,
+      group: 'MARCA & PORTAFOLIO',
+    },
+    {
+      id: 'security',
+      label: 'Base de Datos NocoDB & Exportar',
+      icon: <Database className="w-4 h-4" />,
+      group: 'SISTEMA & NUBE',
+    },
+  ];
+
+  const demosCount = draftProducts.filter((p) => Boolean(p.demoUrl && p.demoUrl.trim())).length;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+    <div
+      className={
+        isFullPage
+          ? 'min-h-screen w-full bg-[#0b0e14] text-zinc-100 flex flex-col'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn'
+      }
+    >
       <div
-        className="relative w-full max-w-5xl h-[96vh] sm:h-[92vh] flex flex-col rounded-2xl sm:rounded-3xl bg-[#141618] border border-[#2d3134] shadow-2xl text-zinc-100 overflow-hidden"
+        className={
+          isFullPage
+            ? 'flex-1 flex flex-col w-full min-h-screen bg-[#0b0e14] text-zinc-100'
+            : 'relative w-full max-w-7xl h-[96vh] flex flex-col rounded-3xl bg-[#0b0e14] border border-[#262d3a] shadow-2xl text-zinc-100 overflow-hidden'
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Header Bar */}
-        <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-[#2d3134] bg-[#181a1b] flex items-center justify-between shrink-0 gap-2">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#38bdf8] p-0.5 shadow-md flex items-center justify-center text-[#121315] shrink-0">
+        {/* ========================================================= */}
+        {/* TOP COMMAND HEADER BAR */}
+        {/* ========================================================= */}
+        <header className="sticky top-0 z-30 h-16 px-4 sm:px-6 border-b border-[#1f2633] bg-[#0f131c]/95 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              className="lg:hidden p-2 rounded-xl bg-[#161b26] border border-[#262d3a] text-zinc-300 hover:text-white cursor-pointer"
+              aria-label="Menú del panel"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00c2b2] to-[#2563eb] flex items-center justify-center text-[#0b0e14] shadow-md shrink-0">
               <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
+
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-lg font-bold font-syne text-white tracking-tight truncate">
-                  Panel Administrador
-                </h2>
-                <span className="px-1.5 py-0.5 rounded-full bg-[#00c2b2]/20 border border-[#00c2b2]/50 text-[9px] sm:text-[10px] font-mono text-[#00c2b2] font-semibold shrink-0">
-                  ACTIVO
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-bold font-syne text-white tracking-tight truncate">
+                  Educom-Tec Admin Workspace
+                </h1>
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#00c2b2]/15 border border-[#00c2b2]/40 text-[10px] font-mono text-[#00c2b2] font-semibold">
+                  admin.html
                 </span>
               </div>
-              <p className="text-[10px] sm:text-xs text-zinc-400 font-mono hidden xs:block truncate">
-                Gestión en tiempo real de catálogo, categorías, perfil y stack
+              <p className="text-[11px] text-zinc-400 font-mono hidden md:block truncate">
+                Centro de control profesional • NocoDB Cloud ({nocoConfig.baseId})
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Right Quick Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={isSyncingNoco}
+              onClick={handleManualNocoSync}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1e2534] border border-[#00c2b2]/40 text-[#00c2b2] text-xs font-mono font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              title="Sincronizar catálogo, categorías y perfil con NocoDB Cloud"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNoco ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">
+                {isSyncingNoco ? 'Sincronizando...' : 'Sincronizar NocoDB'}
+              </span>
+            </button>
+
             <button
               id="admin-download-portable-btn"
               type="button"
               onClick={async () => {
                 try {
-                  showToast('Generando index.html portátil listo para Cloudflare y PC...');
-                  await downloadStandaloneHtml();
-                  showToast('¡Descargado! Puedes abrir index.html con doble clic o subirlo a Cloudflare.');
-                } catch (err) {
-                  console.error(err);
-                  showToast('Error al generar archivo portátil.');
+                  showToast('Generando index.html portátil...');
+                  await downloadStandaloneHtml('index.html');
+                  showToast('¡index.html descargado! Listo para Cloudflare Pages o PC.');
+                } catch {
+                  showToast('Error al generar archivo index.html.');
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-full bg-[#2563eb] hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-              title="Descargar sitio compilado en un solo index.html para abrir en PC o subir a Cloudflare Pages"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+              title="Descargar index.html autónomo"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Descargar Web (Cloudflare / PC)</span>
-              <span className="sm:hidden">Web</span>
+              <span className="hidden sm:inline">Descargar Web</span>
             </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold transition-colors cursor-pointer"
+              title="Volver a la página pública principal (index.html)"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Ver Web Pública</span>
+            </button>
+
             <button
               id="admin-logout-btn"
               type="button"
               onClick={onLogout}
-              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full bg-[#232628] hover:bg-red-950/60 hover:text-red-300 border border-[#2d3134] hover:border-red-800 text-[11px] sm:text-xs font-mono text-zinc-400 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161b26] hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-[#262d3a] hover:border-red-800/60 text-xs font-mono transition-colors cursor-pointer"
               title="Cerrar sesión de administrador"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Cerrar Sesión</span>
-            </button>
-            <button
-              id="close-admin-panel-btn"
-              type="button"
-              onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-full text-zinc-400 hover:text-white hover:bg-[#232628] transition-colors cursor-pointer"
-              aria-label="Cerrar panel"
-            >
-              <X className="w-5 h-5" />
+              <span className="hidden lg:inline">Salir</span>
             </button>
           </div>
-        </div>
+        </header>
 
         {/* Toast Alert Banner */}
         {toastMessage && (
-          <div className="bg-[#00c2b2] text-[#121315] font-syne font-bold text-xs py-2 px-4 sm:px-6 flex items-center justify-between shrink-0 animate-fadeIn">
+          <div className="bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs py-2.5 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20">
             <div className="flex items-center gap-2 truncate">
               <CheckCircle className="w-4 h-4 shrink-0" />
               <span className="truncate">{toastMessage}</span>
@@ -702,2140 +1008,2250 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             <button
               type="button"
               onClick={() => setToastMessage(null)}
-              className="text-xs font-mono underline cursor-pointer shrink-0 ml-2"
+              className="text-xs font-mono underline cursor-pointer shrink-0 ml-3"
             >
               Cerrar
             </button>
           </div>
         )}
 
-        {/* Navigation Tabs Bar - Horizontal scrollable on mobile without wrapping & overlapping */}
-        <div className="px-3 sm:px-6 bg-[#121315] border-b border-[#2d3134] flex items-center gap-1.5 sm:gap-2 shrink-0 py-2 sm:py-3 overflow-x-auto no-scrollbar scroll-smooth">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('products');
-              setEditingProductId(null);
-            }}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'products'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-300 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
+        {/* ========================================================= */}
+        {/* MAIN WORKSPACE BODY (SIDEBAR + CONTENT AREA) */}
+        {/* ========================================================= */}
+        <div className="flex-1 flex min-h-0 relative">
+          {/* Left Navigation Sidebar */}
+          <aside
+            className={`${
+              mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden lg:flex'
+            } w-68 flex-col border-r border-[#1f2633] bg-[#0f131c] shrink-0 select-none`}
           >
-            <Package className="w-3.5 h-3.5" />
-            <span>Sistemas ({draftProducts.length})</span>
-          </button>
+            {mobileSidebarOpen && (
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f2633] lg:hidden">
+                <span className="text-xs font-mono font-bold text-[#00c2b2] uppercase">
+                  Navegación Admin
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="p-1 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('categories')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'categories'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-300 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Categorías ({draftCategories.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'profile'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-300 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>Perfil & Foto</span>
-          </button>
-
-          {/* Stack Tecnológico & Disciplinas */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('skills')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'skills'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-[#00c2b2] hover:text-white bg-[#181a1b] border-[#00c2b2]/40 hover:border-[#00c2b2]'
-            }`}
-          >
-            <Wrench className="w-3.5 h-3.5" />
-            <span className="font-bold">Stack TI</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('experience')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'experience'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-300 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
-          >
-            <Briefcase className="w-3.5 h-3.5" />
-            <span>Experiencia</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('contact')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'contact'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-300 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
-          >
-            <Phone className="w-3.5 h-3.5" />
-            <span>Contacto & WhatsApp</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('security')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
-              activeTab === 'security'
-                ? 'bg-[#00c2b2] text-[#121315] font-bold border-[#00c2b2] shadow-md'
-                : 'text-zinc-400 hover:text-white bg-[#181a1b] border-[#2d3134] hover:border-zinc-500'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>Seguridad</span>
-          </button>
-        </div>
-
-        {/* Tab Content Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#141618]">
-          {/* ========================================================= */}
-          {/* TAB 1: PRODUCTS / SYSTEMS */}
-          {/* ========================================================= */}
-          {activeTab === 'products' && (
-            <div className="space-y-6">
-              {editingProductId ? (
-                // Product Edit / Create Form
-                <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-6 animate-fadeIn">
-                  <div className="flex items-center justify-between pb-4 border-b border-[#2d3134]">
-                    <div>
-                      <span className="text-[11px] font-mono uppercase text-[#00c2b2] font-semibold">
-                        {isCreatingProduct ? 'NUEVO SISTEMA / PRODUCTO' : 'EDITAR SISTEMA'}
+            <div className="flex-1 overflow-y-auto py-5 px-3.5 space-y-6">
+              {['CENTRO DE CONTROL', 'CATÁLOGO COMERCIAL', 'MARCA & PORTAFOLIO', 'SISTEMA & NUBE'].map(
+                (groupName) => {
+                  const groupItems = navItems.filter((item) => item.group === groupName);
+                  return (
+                    <div key={groupName} className="space-y-1.5">
+                      <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
+                        {groupName}
                       </span>
-                      <h3 className="text-xl font-bold font-syne text-white">
-                        {productForm.title || 'Sistema sin título'}
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingProductId(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-mono bg-[#232628] hover:bg-[#2d3134] text-zinc-300 transition-colors cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Título del Sistema / Servicio *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={productForm.title || ''}
-                        onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
-                        placeholder="Ej. Educom ERP & Control de Stock"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Subtítulo o Resumen Técnico
-                      </label>
-                      <input
-                        type="text"
-                        value={productForm.subtitle || ''}
-                        onChange={(e) => setProductForm({ ...productForm, subtitle: e.target.value })}
-                        placeholder="Ej. Gestión de almacén, compras y facturación POS"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Categoría
-                      </label>
-                      <select
-                        value={productForm.category || 'systems'}
-                        onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
-                      >
-                        {draftCategories
-                          .filter((c) => c.id !== 'all')
-                          .map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.label} ({cat.id})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Precio / Modalidad de Cotización
-                      </label>
-                      <input
-                        type="text"
-                        value={productForm.price || ''}
-                        onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                        placeholder="Ej. Consultar Cotización / Licencia + Soporte"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Estado
-                      </label>
-                      <select
-                        value={productForm.status || 'Disponible'}
-                        onChange={(e) => setProductForm({ ...productForm, status: e.target.value as any })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
-                      >
-                        <option value="Disponible">Disponible</option>
-                        <option value="Implementación Inmediata">Implementación Inmediata</option>
-                        <option value="En desarrollo">En desarrollo</option>
-                        <option value="Caso de estudio">Caso de estudio</option>
-                        <option value="Exclusivo">Exclusivo</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Año de Lanzamiento / Versión
-                      </label>
-                      <input
-                        type="text"
-                        value={productForm.year || new Date().getFullYear().toString()}
-                        onChange={(e) => setProductForm({ ...productForm, year: e.target.value })}
-                        placeholder="2026"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* ========================================================= */}
-                  {/* BOTÓN "VER DEMO" — ENLACE WEB O CAPTURA DE DEMO */}
-                  {/* ========================================================= */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-[#121315] border border-[#00c2b2]/40 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#2d3134]">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-[#00c2b2]/15 text-[#00c2b2] border border-[#00c2b2]/30">
-                          <ExternalLink className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs sm:text-sm font-bold font-syne text-white flex items-center gap-2">
-                            <span>Configuración del Botón "Ver Demo"</span>
-                            <span className="px-2 py-0.5 rounded-full bg-[#00c2b2]/15 text-[#00c2b2] text-[10px] font-mono">
-                              URL o Captura
-                            </span>
-                          </h4>
-                          <p className="text-[11px] text-zinc-400 font-mono">
-                            Coloca la dirección web (URL) de tu demo en vivo, video, Drive o sube una captura desde tu dispositivo.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <label
-                          htmlFor="demo-file-upload"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#232628] hover:bg-[#2d3134] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#00c2b2]/40 transition-colors"
-                          title="Subir captura o imagen para el botón Ver Demo"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Subir Captura Demo</span>
-                        </label>
-                        <input
-                          id="demo-file-upload"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              const compressed = await compressImageFile(file, 1400, 0.84);
-                              const existingGallery = productForm.gallery || [];
-                              setProductForm({
-                                ...productForm,
-                                demoUrl: compressed,
-                                gallery: existingGallery.includes(compressed)
-                                  ? existingGallery
-                                  : [compressed, ...existingGallery],
-                              });
-                              showToast('¡Captura de Demo cargada! Al pulsar "Ver Demo" se abrirá en pantalla completa.');
-                            } catch {
-                              showToast('No se pudo procesar la imagen seleccionada.');
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-
-                        {productForm.demoUrl && (
+                      {groupItems.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
                           <button
+                            key={item.id}
                             type="button"
                             onClick={() => {
-                              setProductForm({ ...productForm, demoUrl: '' });
-                              showToast('Enlace de Demo eliminado (el botón "Ver Demo" se ocultará en este sistema).');
+                              setActiveTab(item.id);
+                              if (item.id !== 'products') setEditingProductId(null);
+                              setMobileSidebarOpen(false);
                             }}
-                            className="px-2.5 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 text-xs font-mono transition-colors cursor-pointer"
-                            title="Quitar enlace de Demo"
+                            className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+                              isActive
+                                ? 'bg-[#00c2b2] text-[#0b0e14] font-bold shadow-md'
+                                : 'text-zinc-300 hover:text-white hover:bg-[#161b26]'
+                            }`}
                           >
-                            Quitar Demo
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Dirección Web (URL) para el Botón "Ver Demo"
-                      </label>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={
-                            productForm.demoUrl?.startsWith('data:image/')
-                              ? '[Imagen de Demo subida desde dispositivo]'
-                              : productForm.demoUrl || ''
-                          }
-                          readOnly={Boolean(productForm.demoUrl?.startsWith('data:image/'))}
-                          onChange={(e) => setProductForm({ ...productForm, demoUrl: e.target.value })}
-                          placeholder="Ej: https://mi-sistema-demo.com, enlace de YouTube, Google Drive o deja vacío para ocultar"
-                          className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#181a1b] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                        />
-                        {productForm.demoUrl && !productForm.demoUrl.startsWith('data:') && (
-                          <a
-                            href={
-                              productForm.demoUrl.startsWith('http')
-                                ? productForm.demoUrl
-                                : `https://${productForm.demoUrl}`
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00c2b2]/20 hover:bg-[#00c2b2]/30 text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-bold transition-colors shrink-0"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>Probar URL</span>
-                          </a>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-mono text-zinc-400 mt-1.5 block">
-                        💡 Puedes pegar cualquier dirección web (`https://...`), un video demostrativo, o subir capturas abajo. Si lo dejas vacío, el botón "Ver Demo" no se mostrará en este sistema.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* ========================================================= */}
-                  {/* IMAGEN DE PORTADA Y GALERÍA DE CAPTURAS DESDE DISPOSITIVO */}
-                  {/* ========================================================= */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-[#121315] border border-[#2d3134] space-y-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#2d3134]">
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-bold font-syne text-white uppercase tracking-wider">
-                          Imagen de Portada & Capturas del Sistema
-                        </h4>
-                        <p className="text-[11px] text-zinc-400 font-mono">
-                          Sube imágenes directamente desde tu teléfono o computadora, o pega un enlace URL.
-                        </p>
-                      </div>
-                      <label
-                        htmlFor="product-cover-upload"
-                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] text-xs font-syne font-bold uppercase tracking-wider cursor-pointer transition-all shrink-0 shadow-sm"
-                      >
-                        <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Subir Portada desde Dispositivo</span>
-                      </label>
-                      <input
-                        id="product-cover-upload"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const compressed = await compressImageFile(file, 1280, 0.82);
-                            const currentGallery = productForm.gallery || [];
-                            setProductForm({
-                              ...productForm,
-                              imageUrl: compressed,
-                              gallery: currentGallery.includes(compressed)
-                                ? currentGallery
-                                : [compressed, ...currentGallery],
-                            });
-                            showToast('¡Imagen de portada subida desde tu dispositivo!');
-                          } catch {
-                            showToast('Error al procesar la imagen.');
-                          }
-                          e.target.value = '';
-                        }}
-                      />
-                    </div>
-
-                    {/* Portada Preview + URL Input */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                      <div className="w-full sm:w-36 h-24 rounded-xl overflow-hidden border border-[#2d3134] bg-[#181a1b] shrink-0">
-                        <img
-                          src={
-                            productForm.imageUrl ||
-                            'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80'
-                          }
-                          alt="Vista previa portada"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="flex-1 w-full space-y-1.5">
-                        <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
-                          URL de Imagen de Portada (o sube archivo arriba)
-                        </label>
-                        <input
-                          type="text"
-                          value={
-                            productForm.imageUrl?.startsWith('data:image/')
-                              ? '[Imagen subida desde tu dispositivo]'
-                              : productForm.imageUrl || ''
-                          }
-                          readOnly={Boolean(productForm.imageUrl?.startsWith('data:image/'))}
-                          onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                          placeholder="https://images.unsplash.com/..."
-                          className="w-full px-3.5 py-2 rounded-xl border border-[#2d3134] bg-[#181a1b] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Galería de Capturas Adicionales */}
-                    <div className="pt-3 border-t border-[#2d3134] space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-mono font-bold text-zinc-200 uppercase block">
-                            Galería de Capturas / Pantallas de Demo ({(productForm.gallery || []).length})
-                          </span>
-                          <span className="text-[11px] font-mono text-zinc-400">
-                            Estas capturas se muestran en la ventana del sistema y en el visor interactivo "Ver Demo".
-                          </span>
-                        </div>
-
-                        <label
-                          htmlFor="product-gallery-upload"
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#232628] hover:bg-[#2d3134] text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-semibold cursor-pointer transition-colors shrink-0"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>+ Subir Capturas desde Dispositivo</span>
-                        </label>
-                        <input
-                          id="product-gallery-upload"
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={async (e) => {
-                            const files = Array.from(e.target.files || []) as File[];
-                            if (files.length === 0) return;
-                            try {
-                              const compressedList: string[] = [];
-                              for (const file of files.slice(0, 6)) {
-                                const dataUrl = await compressImageFile(file, 1280, 0.8);
-                                compressedList.push(dataUrl);
-                              }
-                              const currentGallery = productForm.gallery || [];
-                              const updatedGallery = [...currentGallery, ...compressedList];
-                              setProductForm({
-                                ...productForm,
-                                imageUrl: productForm.imageUrl || compressedList[0],
-                                gallery: updatedGallery,
-                              });
-                              showToast(`¡${compressedList.length} captura(s) añadida(s) a la galería del sistema!`);
-                            } catch {
-                              showToast('Error al subir una o más capturas.');
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-                      </div>
-
-                      {/* Añadir captura por URL */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newGalleryUrl}
-                          onChange={(e) => setNewGalleryUrl(e.target.value)}
-                          placeholder="O pega aquí la URL de otra captura (https://...)"
-                          className="flex-1 px-3 py-2 rounded-xl border border-[#2d3134] bg-[#181a1b] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!newGalleryUrl.trim()) return;
-                            const updatedGallery = [...(productForm.gallery || []), newGalleryUrl.trim()];
-                            setProductForm({ ...productForm, gallery: updatedGallery });
-                            setNewGalleryUrl('');
-                            showToast('Captura añadida a la galería.');
-                          }}
-                          className="px-3.5 py-2 rounded-xl bg-[#232628] hover:bg-[#2d3134] text-zinc-200 text-xs font-mono font-bold border border-[#2d3134] cursor-pointer shrink-0"
-                        >
-                          + Añadir URL
-                        </button>
-                      </div>
-
-                      {/* Miniaturas de la galería */}
-                      {productForm.gallery && productForm.gallery.length > 0 && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 pt-1">
-                          {productForm.gallery.map((img, idx) => (
-                            <div
-                              key={idx}
-                              className="relative group aspect-video rounded-xl overflow-hidden border border-[#2d3134] bg-[#181a1b]"
-                            >
-                              <img src={img} alt={`Captura ${idx + 1}`} className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setProductForm({ ...productForm, imageUrl: img });
-                                    showToast('Establecida como imagen de portada principal.');
-                                  }}
-                                  className="px-2 py-1 rounded-md bg-[#00c2b2] text-[#121315] text-[10px] font-mono font-bold cursor-pointer"
-                                  title="Usar como portada"
-                                >
-                                  Portada
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const filtered = (productForm.gallery || []).filter((_, i) => i !== idx);
-                                    setProductForm({ ...productForm, gallery: filtered });
-                                  }}
-                                  className="p-1 rounded-md bg-red-600 text-white cursor-pointer"
-                                  title="Eliminar captura"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                            <div className="flex items-center gap-2.5 truncate">
+                              {item.icon}
+                              <span className="truncate">{item.label}</span>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            {item.badge !== undefined && (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tabular-nums ${
+                                  isActive
+                                    ? 'bg-[#0b0e14]/20 text-[#0b0e14]'
+                                    : 'bg-[#161b26] text-zinc-400 border border-[#262d3a]'
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
+                  );
+                }
+              )}
+            </div>
 
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Descripción Principal *
-                    </label>
-                    <textarea
-                      rows={3}
-                      required
-                      value={productForm.description || ''}
-                      onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                      placeholder="Resumen del sistema para las tarjetas del catálogo..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                    />
-                  </div>
+            {/* Sidebar Bottom Quick CTA */}
+            <div className="p-4 border-t border-[#1f2633] bg-[#0b0e14]/60 space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  handleStartCreateProduct();
+                  setMobileSidebarOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs transition-all cursor-pointer shadow-sm"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Nuevo Sistema</span>
+              </button>
 
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Descripción Detallada (Vista ampliada)
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={productForm.longDescription || ''}
-                      onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
-                      placeholder="Especificaciones técnicas completas para el modal de detalle..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                    />
-                  </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 px-1">
+                <span>NocoDB Cloud</span>
+                <span className="text-[#00c2b2] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00c2b2]" /> Conectado
+                </span>
+              </div>
+            </div>
+          </aside>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Main Scrollable Content Area */}
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#0b0e14]">
+            <div className="max-w-6xl mx-auto space-y-8">
+              {/* ========================================================= */}
+              {/* TAB 0: DASHBOARD GENERAL (EXECUTIVE OVERVIEW) */}
+              {/* ========================================================= */}
+              {activeTab === 'dashboard' && (
+                <div className="space-y-8 animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#1f2633]">
                     <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Tecnologías (separadas por coma)
-                      </label>
-                      <input
-                        type="text"
-                        value={(productForm.technologies || []).join(', ')}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            technologies: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                          })
-                        }
-                        placeholder="PostgreSQL, React, TypeScript, Docker"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                        Tags / Etiquetas (separadas por coma)
-                      </label>
-                      <input
-                        type="text"
-                        value={(productForm.tags || []).join(', ')}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                          })
-                        }
-                        placeholder="ERP, Inventario, SQL, API"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Características Principales (una por línea)
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={(productForm.features || []).join('\n')}
-                      onChange={(e) =>
-                        setProductForm({
-                          ...productForm,
-                          features: e.target.value.split('\n').filter((f) => f.trim().length > 0),
-                        })
-                      }
-                      placeholder="Monitoreo de stock en tiempo real&#10;Facturación electrónica con validación&#10;Backups automáticos en NAS o Cloud"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#2d3134]">
-                    <button
-                      type="button"
-                      onClick={() => setEditingProductId(null)}
-                      className="px-5 py-2.5 rounded-xl text-xs font-mono bg-[#232628] hover:bg-[#2d3134] text-zinc-300 transition-colors cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveProductForm}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase tracking-wider text-xs transition-all active:scale-95 shadow-md cursor-pointer"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>Guardar Sistema</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                // Products List
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-base font-bold font-syne text-white">
-                        Sistemas & Productos en Catálogo
-                      </h3>
-                      <p className="text-xs text-zinc-400 font-mono">
-                        Puedes editar las descripciones, precios o eliminar cualquier ítem.
+                      <span className="text-xs font-mono uppercase tracking-wider text-[#00c2b2] font-bold block">
+                        RESUMEN EJECUTIVO • ADMIN.HTML
+                      </span>
+                      <h2 className="text-2xl sm:text-3xl font-bold font-syne text-white mt-0.5">
+                        Bienvenido, {draftProfile.name.split(' ')[0] || 'Raúl'}
+                      </h2>
+                      <p className="text-xs text-zinc-400 font-mono mt-1">
+                        Gestiona todos los sistemas del catálogo, enlaces de demostración, perfil profesional y respaldos en NocoDB Cloud desde esta página independiente.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleStartCreateProduct}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase tracking-wider text-xs transition-all shadow-md cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                      <span>+ Crear Nuevo Sistema</span>
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleStartCreateProduct}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>+ Agregar Sistema</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          showToast('Descargando admin.html independiente...');
+                          await downloadStandaloneAdminHtml();
+                          showToast('¡admin.html descargado exitosamente!');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#00c2b2]" />
+                        <span>Descargar admin.html</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {draftProducts.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className="p-4 rounded-2xl bg-[#181a1b] border border-[#2d3134] flex flex-col justify-between hover:border-[#00c2b2]/40 transition-colors"
-                      >
-                        <div className="flex items-start gap-3.5 mb-3">
-                          <img
-                            src={prod.imageUrl}
-                            alt={prod.title}
-                            className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#2d3134]"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <span className="px-2 py-0.5 rounded-md bg-[#121315] border border-[#2d3134] text-[10px] font-mono text-[#00c2b2]">
-                                {prod.categoryLabel || prod.category}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[10px] font-mono text-zinc-400">
-                                {prod.status}
-                              </span>
-                              {prod.demoUrl ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-mono text-emerald-300">
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                  <span>Demo activa</span>
-                                </span>
-                              ) : (
-                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">
-                                  Sin demo
-                                </span>
-                              )}
-                            </div>
-                            <h4 className="font-syne font-bold text-white text-sm truncate">
-                              {prod.title}
-                            </h4>
-                            <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5 font-normal">
-                              {prod.description}
-                            </p>
-                          </div>
-                        </div>
+                  {/* KPI Metric Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+                        <span>SISTEMAS EN CATÁLOGO</span>
+                        <Package className="w-4 h-4 text-[#00c2b2]" />
+                      </div>
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-3xl font-bold font-syne text-white tabular-nums">
+                          {draftProducts.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('products')}
+                          className="text-[11px] font-mono text-[#00c2b2] hover:underline cursor-pointer"
+                        >
+                          Gestionar &rarr;
+                        </button>
+                      </div>
+                    </div>
 
-                        <div className="pt-3 border-t border-[#2d3134] flex items-center justify-between">
-                          <span className="text-xs font-mono font-bold text-[#00c2b2]">
-                            {prod.price || 'Consultar Cotización'}
-                          </span>
-                          <div className="flex items-center gap-2">
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+                        <span>CON BOTÓN "VER DEMO"</span>
+                        <ExternalLink className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-3xl font-bold font-syne text-emerald-400 tabular-nums">
+                          {demosCount}
+                        </span>
+                        <span className="text-[11px] font-mono text-zinc-400">
+                          de {draftProducts.length} sistemas
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+                        <span>CATEGORÍAS ACTIVAS</span>
+                        <Layers className="w-4 h-4 text-sky-400" />
+                      </div>
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-3xl font-bold font-syne text-white tabular-nums">
+                          {draftCategories.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('categories')}
+                          className="text-[11px] font-mono text-sky-400 hover:underline cursor-pointer"
+                        >
+                          Editar filtros &rarr;
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#00c2b2]/30 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+                        <span>BASE DE DATOS NOCODB</span>
+                        <Database className="w-4 h-4 text-[#00c2b2]" />
+                      </div>
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-base font-bold font-mono text-[#00c2b2] truncate">
+                          {nocoConfig.baseId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('security')}
+                          className="text-[11px] font-mono text-zinc-300 hover:text-white underline cursor-pointer"
+                        >
+                          Configurar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Management Modules Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
+                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                        <Download className="w-4 h-4 text-[#00c2b2]" />
+                        <span>Exportar Archivos HTML Portátiles</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Descarga tanto la página pública (<code className="text-zinc-200">index.html</code>) como este panel administrativo independiente (<code className="text-zinc-200">admin.html</code>) listos para Cloudflare Pages, GitHub Pages o PC.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => downloadStandaloneHtml('index.html')}
+                          className="px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
+                        >
+                          Descargar index.html
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadStandaloneAdminHtml()}
+                          className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-[#00c2b2] text-xs font-mono font-bold cursor-pointer"
+                        >
+                          Descargar admin.html
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
+                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4 text-[#25D366]" />
+                        <span>WhatsApp & Contacto Directo</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Número activo: <strong className="text-white font-mono">{whatsappPhone || 'Sin configurar'}</strong>
+                        <br />
+                        Correo: <strong className="text-white font-mono">{draftProfile.email}</strong>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('contact')}
+                        className="px-3.5 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                      >
+                        Editar WhatsApp y Redes &rarr;
+                      </button>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
+                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                        <FileJson className="w-4 h-4 text-amber-400" />
+                        <span>Respaldo Total en JSON</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Guarda una copia de seguridad local de todos tus sistemas, fotos y biografía en un archivo JSON o restaura una copia previa.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleExportJsonBackup}
+                          className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 text-xs font-mono font-semibold cursor-pointer"
+                        >
+                          Exportar JSON
+                        </button>
+                        <label className="px-3 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-amber-300 text-xs font-mono font-semibold cursor-pointer">
+                          <span>Importar JSON</span>
+                          <input
+                            type="file"
+                            accept="application/json"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleImportJsonBackup(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Table of Systems */}
+                  <div className="rounded-2xl bg-[#12161f] border border-[#1f2633] overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[#1f2633] flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold font-syne text-white">
+                          Vista Rápida de Sistemas en Catálogo
+                        </h3>
+                        <p className="text-xs text-zinc-400 font-mono">
+                          Haz clic en "Editar" en cualquier sistema para modificar su enlace "Ver Demo", fotos o precios.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('products')}
+                        className="text-xs font-mono text-[#00c2b2] hover:underline cursor-pointer"
+                      >
+                        Ver editor completo &rarr;
+                      </button>
+                    </div>
+
+                    <div className="divide-y divide-[#1f2633]">
+                      {draftProducts.map((prod, idx) => (
+                        <div
+                          key={prod.id}
+                          className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#161b26]/60 transition-colors"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <span className="text-xs font-mono text-zinc-500 w-5 tabular-nums">
+                              #{idx + 1}
+                            </span>
+                            <img
+                              src={prod.imageUrl}
+                              alt={prod.title}
+                              className="w-11 h-11 rounded-xl object-cover border border-[#262d3a] shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-syne font-bold text-white text-sm truncate">
+                                  {prod.title}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-[#0b0e14] border border-[#262d3a] text-[10px] font-mono text-[#00c2b2]">
+                                  {prod.categoryLabel}
+                                </span>
+                                {prod.demoUrl ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-mono text-emerald-300">
+                                    ● Demo Activa
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">
+                                    Sin Demo
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-zinc-400 truncate mt-0.5">{prod.subtitle}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <span className="text-xs font-mono font-bold text-amber-400 mr-2 tabular-nums">
+                              {prod.price}
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleStartEditProduct(prod)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#232628] hover:bg-[#2d3134] text-zinc-200 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-xs font-mono text-zinc-200 cursor-pointer"
                             >
                               <Edit2 className="w-3.5 h-3.5 text-[#00c2b2]" />
                               <span>Editar</span>
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                              className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
-                              title="Eliminar producto"
+                              onClick={() => handleDuplicateProduct(prod)}
+                              className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-400 hover:text-white cursor-pointer"
+                              title="Duplicar sistema"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 1: PRODUCTS / SYSTEMS */}
+              {/* ========================================================= */}
+              {activeTab === 'products' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {editingProductId ? (
+                    <div className="p-6 sm:p-7 rounded-2xl bg-[#12161f] border border-[#262d3a] space-y-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#1f2633]">
+                        <div>
+                          <span className="text-[11px] font-mono uppercase text-[#00c2b2] font-semibold">
+                            {isCreatingProduct ? 'CREAR NUEVO SISTEMA / PRODUCTO' : 'EDITANDO SISTEMA DEL CATÁLOGO'}
+                          </span>
+                          <h3 className="text-xl font-bold font-syne text-white">
+                            {productForm.title || 'Sistema sin título'}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingProductId(null)}
+                            className="px-4 py-2 rounded-xl text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-300 cursor-pointer"
+                          >
+                            &larr; Volver al Listado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveProductForm}
+                            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                          >
+                            <Save className="w-4 h-4" />
+                            <span>Guardar Sistema</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Título del Sistema / Servicio *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={productForm.title || ''}
+                            onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+                            placeholder="Ej. Educom ERP & Control de Stock"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Subtítulo o Resumen Técnico
+                          </label>
+                          <input
+                            type="text"
+                            value={productForm.subtitle || ''}
+                            onChange={(e) => setProductForm({ ...productForm, subtitle: e.target.value })}
+                            placeholder="Ej. Gestión de almacén, compras y facturación POS"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Categoría
+                          </label>
+                          <select
+                            value={productForm.category || 'systems'}
+                            onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
+                          >
+                            {draftCategories
+                              .filter((c) => c.id !== 'all')
+                              .map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.label} ({cat.id})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Precio / Modalidad de Cotización
+                          </label>
+                          <input
+                            type="text"
+                            value={productForm.price || ''}
+                            onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                            placeholder="Ej. Consultar Cotización / $150"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Estado
+                          </label>
+                          <select
+                            value={productForm.status || 'Disponible'}
+                            onChange={(e) => setProductForm({ ...productForm, status: e.target.value as any })}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm cursor-pointer"
+                          >
+                            <option value="Disponible">Disponible</option>
+                            <option value="Implementación Inmediata">Implementación Inmediata</option>
+                            <option value="En desarrollo">En desarrollo</option>
+                            <option value="Caso de estudio">Caso de estudio</option>
+                            <option value="Exclusivo">Exclusivo</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Año de Lanzamiento / Versión
+                          </label>
+                          <input
+                            type="text"
+                            value={productForm.year || new Date().getFullYear().toString()}
+                            onChange={(e) => setProductForm({ ...productForm, year: e.target.value })}
+                            placeholder="2026"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* BOTÓN "VER DEMO" */}
+                      <div className="p-5 rounded-2xl bg-[#0b0e14] border border-[#00c2b2]/40 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#1f2633]">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-[#00c2b2]/15 text-[#00c2b2] border border-[#00c2b2]/30">
+                              <ExternalLink className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs sm:text-sm font-bold font-syne text-white flex items-center gap-2">
+                                <span>Configuración del Botón "Ver Demo"</span>
+                                <span className="px-2 py-0.5 rounded-full bg-[#00c2b2]/15 text-[#00c2b2] text-[10px] font-mono">
+                                  URL o Captura
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-zinc-400 font-mono">
+                                Coloca la dirección web (URL) de tu demo en vivo, video o sube una captura desde tu dispositivo.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <label
+                              htmlFor="demo-file-upload"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#00c2b2]/40 transition-colors"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Subir Captura Demo</span>
+                            </label>
+                            <input
+                              id="demo-file-upload"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const compressed = await compressImageFile(file, 1400, 0.84);
+                                  const existingGallery = productForm.gallery || [];
+                                  setProductForm({
+                                    ...productForm,
+                                    demoUrl: compressed,
+                                    gallery: existingGallery.includes(compressed)
+                                      ? existingGallery
+                                      : [compressed, ...existingGallery],
+                                  });
+                                  showToast('¡Captura de Demo cargada!');
+                                } catch {
+                                  showToast('No se pudo procesar la imagen seleccionada.');
+                                }
+                                e.target.value = '';
+                              }}
+                            />
+
+                            {productForm.demoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProductForm({ ...productForm, demoUrl: '' });
+                                  showToast('Enlace de Demo eliminado.');
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 text-xs font-mono transition-colors cursor-pointer"
+                              >
+                                Quitar Demo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Dirección Web (URL) para el Botón "Ver Demo"
+                          </label>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={
+                                productForm.demoUrl?.startsWith('data:image/')
+                                  ? '[Imagen de Demo subida desde dispositivo]'
+                                  : productForm.demoUrl || ''
+                              }
+                              readOnly={Boolean(productForm.demoUrl?.startsWith('data:image/'))}
+                              onChange={(e) => setProductForm({ ...productForm, demoUrl: e.target.value })}
+                              placeholder="Ej: https://mi-sistema-demo.com, YouTube, Drive o deja vacío para ocultar"
+                              className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#12161f] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                            />
+                            {productForm.demoUrl && !productForm.demoUrl.startsWith('data:') && (
+                              <a
+                                href={
+                                  productForm.demoUrl.startsWith('http')
+                                    ? productForm.demoUrl
+                                    : `https://${productForm.demoUrl}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00c2b2]/20 hover:bg-[#00c2b2]/30 text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-bold transition-colors shrink-0"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Probar URL</span>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* IMAGEN DE PORTADA Y GALERÍA */}
+                      <div className="p-5 rounded-2xl bg-[#0b0e14] border border-[#262d3a] space-y-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1f2633]">
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-bold font-syne text-white uppercase tracking-wider">
+                              Imagen de Portada & Galería de Capturas
+                            </h4>
+                            <p className="text-[11px] text-zinc-400 font-mono">
+                              Sube imágenes desde tu dispositivo o pega enlaces directos.
+                            </p>
+                          </div>
+                          <label
+                            htmlFor="product-cover-upload"
+                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] text-xs font-syne font-bold uppercase tracking-wider cursor-pointer transition-all shrink-0 shadow-sm"
+                          >
+                            <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>Subir Portada</span>
+                          </label>
+                          <input
+                            id="product-cover-upload"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await compressImageFile(file, 1280, 0.82);
+                                const currentGallery = productForm.gallery || [];
+                                setProductForm({
+                                  ...productForm,
+                                  imageUrl: compressed,
+                                  gallery: currentGallery.includes(compressed)
+                                    ? currentGallery
+                                    : [compressed, ...currentGallery],
+                                });
+                                showToast('¡Imagen de portada subida!');
+                              } catch {
+                                showToast('Error al procesar la imagen.');
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <div className="w-full sm:w-40 h-26 rounded-xl overflow-hidden border border-[#262d3a] bg-[#12161f] shrink-0">
+                            <img
+                              src={
+                                productForm.imageUrl ||
+                                'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80'
+                              }
+                              alt="Vista previa portada"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 w-full space-y-1.5">
+                            <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
+                              URL de Imagen de Portada
+                            </label>
+                            <input
+                              type="text"
+                              value={
+                                productForm.imageUrl?.startsWith('data:image/')
+                                  ? '[Imagen subida desde tu dispositivo]'
+                                  : productForm.imageUrl || ''
+                              }
+                              readOnly={Boolean(productForm.imageUrl?.startsWith('data:image/'))}
+                              onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                              placeholder="https://images.unsplash.com/..."
+                              className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Galería */}
+                        <div className="pt-3 border-t border-[#1f2633] space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-xs font-mono font-bold text-zinc-200 uppercase">
+                              Galería de Capturas ({(productForm.gallery || []).length})
+                            </span>
+                            <label
+                              htmlFor="product-gallery-upload"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] border border-[#00c2b2]/40 text-xs font-mono font-semibold cursor-pointer transition-colors shrink-0"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Subir Capturas desde Dispositivo</span>
+                            </label>
+                            <input
+                              id="product-gallery-upload"
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={async (e) => {
+                                const files = Array.from(e.target.files || []) as File[];
+                                if (files.length === 0) return;
+                                try {
+                                  const compressedList: string[] = [];
+                                  for (const file of files.slice(0, 6)) {
+                                    const dataUrl = await compressImageFile(file, 1280, 0.8);
+                                    compressedList.push(dataUrl);
+                                  }
+                                  const currentGallery = productForm.gallery || [];
+                                  setProductForm({
+                                    ...productForm,
+                                    imageUrl: productForm.imageUrl || compressedList[0],
+                                    gallery: [...currentGallery, ...compressedList],
+                                  });
+                                  showToast(`¡${compressedList.length} captura(s) añadida(s)!`);
+                                } catch {
+                                  showToast('Error al subir capturas.');
+                                }
+                                e.target.value = '';
+                              }}
+                            />
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newGalleryUrl}
+                              onChange={(e) => setNewGalleryUrl(e.target.value)}
+                              placeholder="O pega aquí la URL de otra captura (https://...)"
+                              className="flex-1 px-3 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newGalleryUrl.trim()) return;
+                                setProductForm({
+                                  ...productForm,
+                                  gallery: [...(productForm.gallery || []), newGalleryUrl.trim()],
+                                });
+                                setNewGalleryUrl('');
+                                showToast('Captura añadida.');
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-[#161b26] hover:bg-[#1f2633] text-zinc-200 text-xs font-mono font-bold border border-[#262d3a] cursor-pointer shrink-0"
+                            >
+                              + Añadir URL
+                            </button>
+                          </div>
+
+                          {productForm.gallery && productForm.gallery.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 pt-1">
+                              {productForm.gallery.map((img, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative group aspect-video rounded-xl overflow-hidden border border-[#262d3a] bg-[#12161f]"
+                                >
+                                  <img src={img} alt={`Captura ${idx + 1}`} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProductForm({ ...productForm, imageUrl: img });
+                                        showToast('Establecida como portada.');
+                                      }}
+                                      className="px-2 py-1 rounded-md bg-[#00c2b2] text-[#0b0e14] text-[10px] font-mono font-bold cursor-pointer"
+                                    >
+                                      Portada
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const filtered = (productForm.gallery || []).filter((_, i) => i !== idx);
+                                        setProductForm({ ...productForm, gallery: filtered });
+                                      }}
+                                      className="p-1 rounded-md bg-red-600 text-white cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Descripción Principal (Tarjeta) *
+                          </label>
+                          <textarea
+                            rows={3}
+                            required
+                            value={productForm.description || ''}
+                            onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Descripción Detallada (Modal Completo)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={productForm.longDescription || ''}
+                            onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Tecnologías (separadas por coma)
+                          </label>
+                          <input
+                            type="text"
+                            value={(productForm.technologies || []).join(', ')}
+                            onChange={(e) =>
+                              setProductForm({
+                                ...productForm,
+                                technologies: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                              })
+                            }
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Tags / Etiquetas (separadas por coma)
+                          </label>
+                          <input
+                            type="text"
+                            value={(productForm.tags || []).join(', ')}
+                            onChange={(e) =>
+                              setProductForm({
+                                ...productForm,
+                                tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                              })
+                            }
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Características Principales (una por línea)
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={(productForm.features || []).join('\n')}
+                            onChange={(e) =>
+                              setProductForm({
+                                ...productForm,
+                                features: e.target.value.split('\n').filter((f) => f.trim().length > 0),
+                              })
+                            }
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                            Entregables Incluidos (uno por línea)
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={(productForm.deliverables || []).join('\n')}
+                            onChange={(e) =>
+                              setProductForm({
+                                ...productForm,
+                                deliverables: e.target.value.split('\n').filter((d) => d.trim().length > 0),
+                              })
+                            }
+                            placeholder="Instalación y despliegue&#10;Capacitación al personal&#10;Garantía técnica"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white focus:outline-hidden focus:border-[#00c2b2] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#1f2633]">
+                        <button
+                          type="button"
+                          onClick={() => setEditingProductId(null)}
+                          className="px-5 py-2.5 rounded-xl text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] text-zinc-300 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveProductForm}
+                          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs cursor-pointer shadow-md"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Guardar y Sincronizar Sistema</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-xl font-bold font-syne text-white">
+                            Catálogo de Sistemas & Productos ({draftProducts.length})
+                          </h2>
+                          <p className="text-xs text-zinc-400 font-mono">
+                            Busca, filtra, reordena, duplica o edita cualquier sistema del catálogo comercial.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleStartCreateProduct}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          <span>+ Crear Nuevo Sistema</span>
+                        </button>
+                      </div>
+
+                      {/* Search & Category Filter Bar */}
+                      <div className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="relative flex-1">
+                          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={adminSearch}
+                            onChange={(e) => setAdminSearch(e.target.value)}
+                            placeholder="Buscar sistema por título, descripción o etiqueta..."
+                            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                          />
+                        </div>
+                        <select
+                          value={adminCatFilter}
+                          onChange={(e) => setAdminCatFilter(e.target.value)}
+                          className="px-3.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-200 focus:outline-hidden focus:border-[#00c2b2] cursor-pointer"
+                        >
+                          {draftCategories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {filteredAdminProducts.map((prod) => {
+                          const realIdx = draftProducts.findIndex((p) => p.id === prod.id);
+                          return (
+                            <div
+                              key={prod.id}
+                              className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col justify-between hover:border-[#00c2b2]/40 transition-colors"
+                            >
+                              <div className="flex items-start gap-4 mb-4">
+                                <img
+                                  src={prod.imageUrl}
+                                  alt={prod.title}
+                                  className="w-20 h-20 rounded-xl object-cover shrink-0 border border-[#262d3a]"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                    <span className="px-2 py-0.5 rounded-md bg-[#0b0e14] border border-[#262d3a] text-[10px] font-mono text-[#00c2b2]">
+                                      {prod.categoryLabel || prod.category}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[10px] font-mono text-zinc-300">
+                                      {prod.status}
+                                    </span>
+                                    {prod.demoUrl ? (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-mono text-emerald-300">
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                        <span>Demo Activa</span>
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">
+                                        Sin demo
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h4 className="font-syne font-bold text-white text-base truncate">
+                                    {prod.title}
+                                  </h4>
+                                  <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5">
+                                    {prod.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t border-[#1f2633] flex items-center justify-between gap-2">
+                                <span className="text-xs font-mono font-bold text-[#00c2b2] tabular-nums">
+                                  {prod.price || 'Consultar Cotización'}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={realIdx <= 0}
+                                    onClick={() => handleMoveProduct(prod.id, 'up')}
+                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                    title="Subir posición"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={realIdx === -1 || realIdx >= draftProducts.length - 1}
+                                    onClick={() => handleMoveProduct(prod.id, 'down')}
+                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                    title="Bajar posición"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDuplicateProduct(prod)}
+                                    className="p-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-zinc-400 hover:text-white cursor-pointer"
+                                    title="Duplicar sistema"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditProduct(prod)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#161b26] hover:bg-[#1f2633] border border-[#262d3a] text-zinc-200 cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-[#00c2b2]" />
+                                    <span>Editar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteProduct(prod.id, prod.title)}
+                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                                    title="Eliminar sistema"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 2: CATEGORIES */}
+              {/* ========================================================= */}
+              {activeTab === 'categories' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div>
+                    <h2 className="text-xl font-bold font-syne text-white">
+                      Pestañas de Categorías del Catálogo
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Estas son las pestañas que tus visitantes ven arriba de los sistemas para filtrar.
+                    </p>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
+                      + Añadir Nueva Categoría
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          Identificador ID (ej: telecom, cloud, servidores)
+                        </label>
+                        <input
+                          type="text"
+                          value={newCatId}
+                          onChange={(e) => setNewCatId(e.target.value)}
+                          placeholder="telecom"
+                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          Nombre Visible en Pantalla
+                        </label>
+                        <input
+                          type="text"
+                          value={newCatLabel}
+                          onChange={(e) => setNewCatLabel(e.target.value)}
+                          placeholder="Telecomunicaciones & Enlaces"
+                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                      <span>Agregar Categoría</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {draftCategories.map((cat) => {
+                      const count =
+                        cat.id === 'all'
+                          ? draftProducts.length
+                          : draftProducts.filter((p) => p.category === cat.id).length;
+                      return (
+                        <div
+                          key={cat.id}
+                          className="p-4 rounded-xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="px-2.5 py-1 rounded-md bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-[#00c2b2] font-semibold">
+                              {cat.id}
+                            </span>
+                            <input
+                              type="text"
+                              value={cat.label}
+                              onChange={(e) => handleUpdateCategoryLabel(cat.id, e.target.value)}
+                              className="px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-white text-xs font-mono focus:border-[#00c2b2] focus:outline-hidden w-64"
+                            />
+                            <span className="text-xs font-mono text-zinc-400">
+                              ({count} sistemas)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            {cat.id === 'all' ? (
+                              <span className="text-[10px] font-mono text-zinc-500 italic">
+                                Categoría raíz (obligatoria)
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 3: PROFILE & ABOUT ME */}
+              {/* ========================================================= */}
+              {activeTab === 'profile' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-bold font-syne text-white">
+                        Identidad Profesional, Foto & Hero
+                      </h2>
+                      <p className="text-xs text-zinc-400 font-mono">
+                        Edita tu foto oficial, textos de portada (Hero), biografía "Sobre Mí" y métricas.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveProfile}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Guardar Cambios de Perfil</span>
+                    </button>
+                  </div>
+
+                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-6">
+                    {/* Foto de Perfil */}
+                    <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-[#0b0e14] border border-[#262d3a]">
+                      <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-[#00c2b2] shrink-0 bg-[#12161f]">
+                        {draftProfile.avatarUrl ? (
+                          <img
+                            src={draftProfile.avatarUrl}
+                            alt={draftProfile.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-2xl font-bold font-syne text-[#00c2b2]">
+                            RR
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-2 w-full">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
+                            Foto de Perfil Oficial
+                          </label>
+                          <label
+                            htmlFor="profile-photo-upload-btn"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#262d3a]"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Subir desde dispositivo</span>
+                          </label>
+                          <input
+                            id="profile-photo-upload-btn"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await compressImageFile(file, 900, 0.85);
+                                setDraftProfile({ ...draftProfile, avatarUrl: compressed });
+                                showToast('Foto cargada. Haz clic en "Guardar Cambios de Perfil" para aplicarla.');
+                              } catch {
+                                showToast('Error al procesar la imagen.');
+                              }
+                            }}
+                          />
+                        </div>
+                        <input
+                          type="url"
+                          value={draftProfile.avatarUrl || ''}
+                          onChange={(e) => setDraftProfile({ ...draftProfile, avatarUrl: e.target.value })}
+                          placeholder="O pega un enlace de imagen (https://...)"
+                          className="w-full px-3.5 py-2 rounded-xl border border-[#262d3a] bg-[#12161f] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Nombre Completo
+                        </label>
+                        <input
+                          type="text"
+                          value={draftProfile.name}
+                          onChange={(e) => setDraftProfile({ ...draftProfile, name: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Cargo / Título Profesional
+                        </label>
+                        <input
+                          type="text"
+                          value={draftProfile.title}
+                          onChange={(e) => setDraftProfile({ ...draftProfile, title: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Ubicación & Modalidad
+                        </label>
+                        <input
+                          type="text"
+                          value={draftProfile.location}
+                          onChange={(e) => setDraftProfile({ ...draftProfile, location: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Estado de Disponibilidad
+                        </label>
+                        <input
+                          type="text"
+                          value={draftProfile.availability}
+                          onChange={(e) => setDraftProfile({ ...draftProfile, availability: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        Tagline de Bienvenida (Hero Principal)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={draftProfile.tagline}
+                        onChange={(e) => setDraftProfile({ ...draftProfile, tagline: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        Biografía Completa ("Sobre Mí")
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={draftProfile.bio}
+                        onChange={(e) => setDraftProfile({ ...draftProfile, bio: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                      />
+                    </div>
+
+                    {/* Stats / KPIs */}
+                    <div>
+                      <span className="block text-xs font-mono font-bold text-zinc-300 mb-3 uppercase">
+                        Métricas & KPIs Destacados
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {draftProfile.stats.map((stat, sIdx) => (
+                          <div key={sIdx} className="p-3.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] space-y-2">
+                            <input
+                              type="text"
+                              value={stat.label}
+                              onChange={(e) => {
+                                const newStats = [...draftProfile.stats];
+                                newStats[sIdx] = { ...newStats[sIdx], label: e.target.value };
+                                setDraftProfile({ ...draftProfile, stats: newStats });
+                              }}
+                              className="w-full px-2 py-1 text-[11px] font-mono text-zinc-400 bg-transparent border-b border-[#262d3a] focus:outline-hidden"
+                            />
+                            <input
+                              type="text"
+                              value={stat.value}
+                              onChange={(e) => {
+                                const newStats = [...draftProfile.stats];
+                                newStats[sIdx] = { ...newStats[sIdx], value: e.target.value };
+                                setDraftProfile({ ...draftProfile, stats: newStats });
+                              }}
+                              className="w-full px-2.5 py-1.5 text-sm font-bold font-syne text-[#00c2b2] bg-[#12161f] border border-[#262d3a] rounded-lg focus:outline-hidden tabular-nums"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#1f2633] flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveProfile}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Guardar Información de Perfil</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 4: SKILLS, EDUCATION & CERTIFICATIONS */}
+              {/* ========================================================= */}
+              {activeTab === 'skills' && (
+                <div className="space-y-8 animate-fadeIn">
+                  <div>
+                    <h2 className="text-xl font-bold font-syne text-white">
+                      Stack Tecnológico, Educación & Certificaciones
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Administra tus disciplinas técnicas, formación académica y certificaciones.
+                    </p>
+                  </div>
+
+                  {/* Add Skill Category */}
+                  <div className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row items-center gap-3">
+                    <input
+                      type="text"
+                      value={newSkillCatName}
+                      onChange={(e) => setNewSkillCatName(e.target.value)}
+                      placeholder="Nombre de nueva categoría o disciplina (ej: Redes & MikroTik, Cloud & DevOps)"
+                      className="flex-1 w-full px-3.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSkillCategory}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                      <span>+ Crear Categoría</span>
+                    </button>
+                  </div>
+
+                  {/* Skills Groups */}
+                  <div className="space-y-4">
+                    {draftProfile.skills.map((group, gIdx) => (
+                      <div key={gIdx} className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-[#1f2633]">
+                          {editingSkillCatIdx === gIdx ? (
+                            <div className="flex items-center gap-2 flex-1 mr-3">
+                              <input
+                                type="text"
+                                value={editingSkillCatName}
+                                onChange={(e) => setEditingSkillCatName(e.target.value)}
+                                className="flex-1 px-2.5 py-1 rounded-lg bg-[#0b0e14] border border-[#00c2b2] text-xs font-mono font-bold text-white uppercase focus:outline-hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveSkillCategoryName(gIdx)}
+                                className="p-1 rounded-lg bg-[#00c2b2] text-[#0b0e14] cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-syne font-bold text-white text-sm uppercase tracking-wider">
+                                {group.category}
+                              </h4>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSkillCatIdx(gIdx);
+                                  setEditingSkillCatName(group.category);
+                                }}
+                                className="p-1 rounded-md text-zinc-500 hover:text-[#00c2b2] cursor-pointer"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSkillCategory(gIdx)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {group.items.map((item, iIdx) => (
+                            <span
+                              key={iIdx}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-200"
+                            >
+                              <span>{item}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSkillItem(gIdx, iIdx)}
+                                className="text-zinc-500 hover:text-red-400 cursor-pointer ml-1"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2">
+                          <input
+                            type="text"
+                            value={newSkillItem.catIdx === gIdx ? newSkillItem.text : ''}
+                            onChange={(e) => setNewSkillItem({ catIdx: gIdx, text: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddSkillItem(gIdx);
+                              }
+                            }}
+                            placeholder={`+ Agregar habilidad a ${group.category}...`}
+                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddSkillItem(gIdx)}
+                            className="px-3 py-1.5 rounded-lg bg-[#161b26] hover:bg-[#1f2633] text-[#00c2b2] font-mono text-xs cursor-pointer"
+                          >
+                            Añadir
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                </>
-              )}
-            </div>
-          )}
 
-          {/* ========================================================= */}
-          {/* TAB 2: CATEGORIES */}
-          {/* ========================================================= */}
-          {activeTab === 'categories' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base font-bold font-syne text-white">
-                  Pestañas de Categorías del Catálogo
-                </h3>
-                <p className="text-xs text-zinc-400 font-mono">
-                  Estas son las pestañas que tus visitantes ven arriba de los productos para filtrar.
-                </p>
-              </div>
-
-              {/* Add category box */}
-              <div className="p-5 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-4">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
-                  + Añadir Nueva Categoría
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Identificador ID (ej: telecom, cloud, servidores)
-                    </label>
-                    <input
-                      type="text"
-                      value={newCatId}
-                      onChange={(e) => setNewCatId(e.target.value)}
-                      placeholder="telecom"
-                      className="w-full px-3.5 py-2 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Nombre Visible en Pantalla
-                    </label>
-                    <input
-                      type="text"
-                      value={newCatLabel}
-                      onChange={(e) => setNewCatLabel(e.target.value)}
-                      placeholder="Telecomunicaciones & Enlaces"
-                      className="w-full px-3.5 py-2 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddCategory}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs tracking-wider transition-all cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>Agregar Categoría</span>
-                </button>
-              </div>
-
-              {/* Current Categories List */}
-              <div className="space-y-3">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 block">
-                  Categorías Actuales ({draftCategories.length})
-                </span>
-                <div className="space-y-2.5">
-                  {draftCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="p-3.5 rounded-xl bg-[#181a1b] border border-[#2d3134] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="px-2.5 py-1 rounded-md bg-[#121315] border border-[#2d3134] text-xs font-mono text-[#00c2b2] font-semibold">
-                          {cat.id}
-                        </span>
+                  {/* Education & Certifications */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Education */}
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
+                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                        <GraduationCap className="w-4 h-4 text-[#00c2b2]" />
+                        <span>Educación & Títulos</span>
+                      </h3>
+                      <div className="space-y-2">
+                        {(draftProfile.education || []).map((ed, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex items-center justify-between gap-2"
+                          >
+                            <div>
+                              <p className="text-xs font-bold text-white">{ed.degree}</p>
+                              <p className="text-[11px] font-mono text-zinc-400">
+                                {ed.institution} • {ed.year}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = {
+                                  ...draftProfile,
+                                  education: draftProfile.education.filter((_, i) => i !== idx),
+                                };
+                                setDraftProfile(updated);
+                                saveProfile(updated);
+                                onUpdateProfile(updated);
+                              }}
+                              className="p-1.5 text-zinc-400 hover:text-red-400 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-2 pt-2 border-t border-[#1f2633]">
                         <input
                           type="text"
-                          value={cat.label}
-                          onChange={(e) => handleUpdateCategoryLabel(cat.id, e.target.value)}
-                          className="px-3 py-1 rounded-lg bg-[#121315] border border-[#2d3134] text-white text-xs font-mono focus:border-[#00c2b2] focus:outline-hidden w-64"
+                          value={eduForm.degree}
+                          onChange={(e) => setEduForm({ ...eduForm, degree: e.target.value })}
+                          placeholder="Título o Carrera..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={eduForm.institution}
+                            onChange={(e) => setEduForm({ ...eduForm, institution: e.target.value })}
+                            placeholder="Institución..."
+                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                          <input
+                            type="text"
+                            value={eduForm.year}
+                            onChange={(e) => setEduForm({ ...eduForm, year: e.target.value })}
+                            placeholder="Año"
+                            className="w-24 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!eduForm.degree.trim()) return;
+                            const updated = {
+                              ...draftProfile,
+                              education: [...(draftProfile.education || []), eduForm],
+                            };
+                            setDraftProfile(updated);
+                            saveProfile(updated);
+                            onUpdateProfile(updated);
+                            setEduForm({ degree: '', institution: '', year: '' });
+                            showToast('Educación añadida.');
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                        >
+                          + Añadir Educación
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Certifications */}
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
+                      <h3 className="text-sm font-bold font-syne text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>Certificaciones & Cursos</span>
+                      </h3>
+                      <div className="space-y-2">
+                        {(draftProfile.certifications || []).map((cert, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex items-center justify-between gap-2"
+                          >
+                            <span className="text-xs font-mono text-zinc-200">{cert}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = {
+                                  ...draftProfile,
+                                  certifications: draftProfile.certifications.filter((_, i) => i !== idx),
+                                };
+                                setDraftProfile(updated);
+                                saveProfile(updated);
+                                onUpdateProfile(updated);
+                              }}
+                              className="p-1 text-zinc-400 hover:text-red-400 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t border-[#1f2633]">
+                        <input
+                          type="text"
+                          value={newCertText}
+                          onChange={(e) => setNewCertText(e.target.value)}
+                          placeholder="Nueva certificación o logro..."
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newCertText.trim()) return;
+                            const updated = {
+                              ...draftProfile,
+                              certifications: [...(draftProfile.certifications || []), newCertText.trim()],
+                            };
+                            setDraftProfile(updated);
+                            saveProfile(updated);
+                            onUpdateProfile(updated);
+                            setNewCertText('');
+                            showToast('Certificación añadida.');
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                        >
+                          + Añadir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 5: EXPERIENCE */}
+              {/* ========================================================= */}
+              {activeTab === 'experience' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold font-syne text-white">
+                        Historial Profesional & Trayectoria
+                      </h2>
+                      <p className="text-xs text-zinc-400 font-mono">
+                        Puestos y roles que aparecen en tu cronología laboral.
+                      </p>
+                    </div>
+                    {!isAddingExp && editingExpIdx === null && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingExp(true);
+                          setExpForm({ role: '', company: '', period: '', description: '' });
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs tracking-wider cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>+ Añadir Posición</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {(isAddingExp || editingExpIdx !== null) && (
+                    <div className="p-5 rounded-2xl bg-[#12161f] border border-[#262d3a] space-y-4">
+                      <span className="text-xs font-mono font-bold uppercase text-[#00c2b2] block">
+                        {isAddingExp ? '+ Nueva Posición Laboral' : 'Editar Posición'}
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Rol / Cargo</label>
+                          <input
+                            type="text"
+                            value={expForm.role}
+                            onChange={(e) => setExpForm({ ...expForm, role: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Empresa / Firma</label>
+                          <input
+                            type="text"
+                            value={expForm.company}
+                            onChange={(e) => setExpForm({ ...expForm, company: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">Período</label>
+                          <input
+                            type="text"
+                            value={expForm.period}
+                            onChange={(e) => setExpForm({ ...expForm, period: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">Descripción</label>
+                        <textarea
+                          rows={3}
+                          value={expForm.description}
+                          onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
                         />
                       </div>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingExp(false);
+                            setEditingExpIdx(null);
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs font-mono bg-[#161b26] text-zinc-300 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveExperience}
+                          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#00c2b2] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Guardar</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        {cat.id === 'all' ? (
-                          <span className="text-[10px] font-mono text-zinc-500 italic">
-                            Categoría raíz (obligatoria)
-                          </span>
-                        ) : (
+                  <div className="space-y-3">
+                    {draftProfile.experience.map((exp, idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-2xl bg-[#12161f] border border-[#1f2633] flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-syne font-bold text-white text-sm">{exp.role}</h4>
+                            <span className="text-[11px] font-mono text-[#00c2b2] font-semibold">{exp.period}</span>
+                          </div>
+                          <p className="text-xs font-mono text-[#ff7a00] mt-0.5">{exp.company}</p>
+                          <p className="text-xs text-zinc-300 mt-2 leading-relaxed">{exp.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                           <button
                             type="button"
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
-                            title="Eliminar categoría"
+                            onClick={() => {
+                              setEditingExpIdx(idx);
+                              setExpForm({ ...exp });
+                              setIsAddingExp(false);
+                            }}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-[#161b26] cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4 text-[#00c2b2]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExperience(idx)}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 6: CONTACT & WHATSAPP */}
+              {/* ========================================================= */}
+              {activeTab === 'contact' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div>
+                    <h2 className="text-xl font-bold font-syne text-white">
+                      Canales de Contacto Directo, WhatsApp & Redes Sociales
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Personaliza tu número de WhatsApp para chat directo y agrega tus redes sociales.
+                    </p>
+                  </div>
+
+                  {/* WhatsApp Configuration Card */}
+                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#25D366]/30 space-y-5">
+                    <div className="flex items-center gap-3 pb-3 border-b border-[#1f2633]">
+                      <div className="p-2.5 rounded-xl bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30">
+                        <MessageCircle className="w-5 h-5 fill-current" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold font-syne text-white">
+                          Contacto Directo por WhatsApp (Enlace wa.me)
+                        </h4>
+                        <p className="text-xs text-zinc-400 font-mono">
+                          Permite que tus clientes te escriban con 1 clic desde la web y el botón flotante.
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* ========================================================= */}
-          {/* TAB 3: PROFILE & ABOUT ME */}
-          {/* ========================================================= */}
-          {activeTab === 'profile' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold font-syne text-white">
-                    Información Personal & Sección "Sobre Mí"
-                  </h3>
-                  <p className="text-xs text-zinc-400 font-mono">
-                    Edita tu foto oficial, textos del Hero y biografía de la Slide 03 (Sobre Mí).
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('skills')}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#00c2b2]/10 hover:bg-[#00c2b2]/20 border border-[#00c2b2]/40 text-[#00c2b2] text-xs font-mono font-bold transition-all cursor-pointer shrink-0"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  <span>Editar Stack & Disciplinas &rarr;</span>
-                </button>
-              </div>
-
-              {/* Banner destacado para acceso rápido a Stack Tecnológico */}
-              <div className="p-4 rounded-2xl bg-[#121315] border border-[#00c2b2]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-[#00c2b2]/10 text-[#00c2b2] border border-[#00c2b2]/30 shrink-0">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold font-syne text-white uppercase tracking-wider">
-                      Stack Tecnológico & Disciplinas
-                    </h4>
-                    <p className="text-[11px] text-zinc-400 font-mono">
-                      Categorías activas ({draftProfile.skills.length}): {draftProfile.skills.map((s) => s.category).join(' • ')}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('skills')}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold text-xs uppercase tracking-wider shrink-0 transition-all cursor-pointer"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  <span>Modificar Disciplinas &rarr;</span>
-                </button>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-5">
-                {/* Foto de Perfil / Avatar */}
-                <div className="p-4 rounded-2xl bg-[#121315] border border-[#2d3134] flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                  <div className="relative group shrink-0">
-                    <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#00c2b2] shadow-lg bg-[#181a1b]">
-                      <img
-                        src={draftProfile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"}
-                        alt="Foto de perfil"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { flag: '🇻🇪', code: '+58', name: 'Venezuela' },
+                        { flag: '🇦🇷', code: '+54 9', name: 'Argentina' },
+                        { flag: '🇨🇴', code: '+57', name: 'Colombia' },
+                        { flag: '🇲🇽', code: '+52 1', name: 'México' },
+                        { flag: '🇨🇱', code: '+56', name: 'Chile' },
+                        { flag: '🇪🇸', code: '+34', name: 'España' },
+                        { flag: '🇺🇸', code: '+1', name: 'USA' },
+                      ].map((country) => (
+                        <button
+                          key={country.code}
+                          type="button"
+                          onClick={() => {
+                            const currentDigits = whatsappPhone.replace(/^\+[0-9\s]+/, '').replace(/^0+/, '').trim();
+                            const newPhone = `${country.code} ${currentDigits}`.trim();
+                            setWhatsappPhone(newPhone);
+                            const clean = newPhone.replace(/[^0-9]/g, '');
+                            const newWaUrl = clean
+                              ? `https://wa.me/${clean}?text=${encodeURIComponent(whatsappMessage || 'Hola Raul, deseo consultar por servicios de Educom-Tec')}`
+                              : '';
+                            setDraftProfile({
+                              ...draftProfile,
+                              whatsapp: newWaUrl,
+                              whatsappNumber: newPhone,
+                            });
+                            showToast(`Código ${country.name} (${country.code}) aplicado`);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0b0e14] hover:bg-[#161b26] border border-[#262d3a] text-xs font-mono text-zinc-300 cursor-pointer"
+                        >
+                          <span>{country.flag}</span>
+                          <span className="font-bold text-[#25D366]">{country.code}</span>
+                          <span className="text-[10px] text-zinc-400">{country.name}</span>
+                        </button>
+                      ))}
                     </div>
-                    <label
-                      htmlFor="profile-photo-upload"
-                      className="absolute inset-0 rounded-full bg-black/60 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px] font-mono"
-                      title="Subir foto desde tu dispositivo"
-                    >
-                      <Camera className="w-5 h-5 mb-0.5 text-[#00c2b2]" />
-                      <span>Subir</span>
-                    </label>
-                    <input
-                      id="profile-photo-upload"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 2.5 * 1024 * 1024) {
-                            showToast('La imagen excede 2.5MB. Por favor usa una imagen más liviana.');
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            if (typeof reader.result === 'string') {
-                              setDraftProfile({ ...draftProfile, avatarUrl: reader.result });
-                              showToast('Foto cargada. Haz clic en "Guardar Información de Perfil" para aplicarla.');
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </div>
 
-                  <div className="flex-1 space-y-2 w-full">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-mono font-bold text-zinc-300 uppercase">
-                        Foto de Perfil Oficial (Sobre Mí & Portafolio)
-                      </label>
-                      <label
-                        htmlFor="profile-photo-upload-btn"
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-[#00c2b2] text-xs font-mono font-semibold cursor-pointer border border-[#2d3134]"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Subir desde dispositivo</span>
-                      </label>
-                      <input
-                        id="profile-photo-upload-btn"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            if (file.size > 2.5 * 1024 * 1024) {
-                              showToast('La imagen excede 2.5MB. Por favor usa una imagen más liviana.');
-                              return;
-                            }
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              if (typeof reader.result === 'string') {
-                                setDraftProfile({ ...draftProfile, avatarUrl: reader.result });
-                                showToast('Foto cargada. Haz clic en "Guardar Información de Perfil" para aplicarla.');
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </div>
-                    <input
-                      type="url"
-                      value={draftProfile.avatarUrl || ''}
-                      onChange={(e) => setDraftProfile({ ...draftProfile, avatarUrl: e.target.value })}
-                      placeholder="O pega un enlace de imagen (https://...)"
-                      className="w-full px-3.5 py-2 rounded-xl border border-[#2d3134] bg-[#181a1b] text-white font-mono text-xs focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                    <p className="text-[11px] font-mono text-zinc-500">
-                      Puedes subir tu foto desde tu dispositivo o pegar un enlace web directo.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Nombre Completo
-                    </label>
-                    <input
-                      type="text"
-                      value={draftProfile.name}
-                      onChange={(e) => setDraftProfile({ ...draftProfile, name: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Cargo / Título Profesional
-                    </label>
-                    <input
-                      type="text"
-                      value={draftProfile.title}
-                      onChange={(e) => setDraftProfile({ ...draftProfile, title: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Ubicación & Modalidad
-                    </label>
-                    <input
-                      type="text"
-                      value={draftProfile.location}
-                      onChange={(e) => setDraftProfile({ ...draftProfile, location: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Estado de Disponibilidad
-                    </label>
-                    <input
-                      type="text"
-                      value={draftProfile.availability}
-                      onChange={(e) => setDraftProfile({ ...draftProfile, availability: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                    Tagline de Bienvenida (Párrafo destacado en Hero)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={draftProfile.tagline}
-                    onChange={(e) => setDraftProfile({ ...draftProfile, tagline: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                    Biografía Completa ("Sobre Mí")
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={draftProfile.bio}
-                    onChange={(e) => setDraftProfile({ ...draftProfile, bio: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                  />
-                </div>
-
-                {/* Stats / KPIs */}
-                <div>
-                  <span className="block text-xs font-mono font-bold text-zinc-300 mb-3 uppercase">
-                    Métricas & KPIs Destacados
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {draftProfile.stats.map((stat, sIdx) => (
-                      <div key={sIdx} className="p-3 rounded-xl bg-[#121315] border border-[#2d3134] space-y-1.5">
-                        <label className="text-[10px] font-mono text-zinc-400 block">{stat.label}</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Tu Número de Teléfono / WhatsApp
+                        </label>
                         <input
                           type="text"
-                          value={stat.value}
+                          value={whatsappPhone}
                           onChange={(e) => {
-                            const newStats = [...draftProfile.stats];
-                            newStats[sIdx] = { ...newStats[sIdx], value: e.target.value };
-                            setDraftProfile({ ...draftProfile, stats: newStats });
+                            const val = e.target.value;
+                            setWhatsappPhone(val);
+                            const clean = val.replace(/[^0-9]/g, '');
+                            const newUrl = clean
+                              ? `https://wa.me/${clean}?text=${encodeURIComponent(whatsappMessage || 'Hola Raul, deseo consultar por servicios de Educom-Tec')}`
+                              : '';
+                            setDraftProfile({
+                              ...draftProfile,
+                              whatsapp: newUrl,
+                              whatsappNumber: val,
+                            });
                           }}
-                          className="w-full px-2.5 py-1 text-sm font-bold font-syne text-[#00c2b2] bg-[#181a1b] border border-[#2d3134] rounded-lg focus:outline-hidden"
+                          placeholder="Ej: +58 412 1234567"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
                         />
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="pt-4 border-t border-[#2d3134] flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSaveProfile}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase tracking-wider text-xs transition-all shadow-md cursor-pointer"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Información de Perfil</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 4: CONTACT & WHATSAPP */}
-          {/* ========================================================= */}
-          {activeTab === 'contact' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base font-bold font-syne text-white">
-                  Canales de Contacto Directo, WhatsApp & Redes Sociales
-                </h3>
-                <p className="text-xs text-zinc-400 font-mono">
-                  Personaliza tu número de WhatsApp para chat directo y agrega todas tus redes (Instagram, Facebook, LinkedIn, etc.).
-                </p>
-              </div>
-
-              {/* WhatsApp Configuration Card */}
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#25D366]/30 space-y-5 relative overflow-hidden">
-                <div className="flex items-center gap-3 pb-3 border-b border-[#2d3134]">
-                  <div className="p-2.5 rounded-xl bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30">
-                    <MessageCircle className="w-5 h-5 fill-current" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold font-syne text-white flex items-center gap-2">
-                      <span>Contacto Directo por WhatsApp</span>
-                      <span className="px-2 py-0.5 rounded-full bg-[#25D366]/10 text-[#25D366] text-[10px] font-mono font-bold">
-                        Enlace wa.me
-                      </span>
-                    </h4>
-                    <p className="text-xs text-zinc-400 font-mono">
-                      Permite que tus clientes te escriban directamente con 1 solo clic desde la web y el botón flotante.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Explanatory banner: What to write here */}
-                <div className="p-3.5 rounded-xl bg-[#25D366]/5 border border-[#25D366]/25 text-xs font-mono space-y-1.5 text-zinc-300">
-                  <div className="flex items-center gap-1.5 text-[#25D366] font-bold text-xs">
-                    <Check className="w-4 h-4" />
-                    <span>¿Qué se coloca aquí?</span>
-                  </div>
-                  <p className="leading-relaxed">
-                    Coloca tu <strong className="text-white">número telefónico con el código de país</strong> (ejemplo para Venezuela: <code className="text-[#25D366] font-bold px-1 py-0.5 rounded bg-[#121315]">+58 412 1234567</code>). 
-                    No es necesario inventar enlaces raros; el sistema generará automáticamente tu enlace oficial <code className="text-zinc-300">wa.me</code> para que tus clientes chateen contigo de inmediato.
-                  </p>
-                </div>
-
-                {/* Country Quick Buttons */}
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block mb-2">
-                    Atajo: Toca tu país para colocar el código correspondiente:
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { flag: '🇻🇪', code: '+58', name: 'Venezuela' },
-                      { flag: '🇦🇷', code: '+54 9', name: 'Argentina' },
-                      { flag: '🇨🇴', code: '+57', name: 'Colombia' },
-                      { flag: '🇲🇽', code: '+52 1', name: 'México' },
-                      { flag: '🇨🇱', code: '+56', name: 'Chile' },
-                      { flag: '🇪🇸', code: '+34', name: 'España' },
-                      { flag: '🇺🇸', code: '+1', name: 'USA' },
-                    ].map((country) => (
-                      <button
-                        key={country.code}
-                        type="button"
-                        onClick={() => {
-                          const currentDigits = whatsappPhone.replace(/^\+[0-9\s]+/, '').replace(/^0+/, '').trim();
-                          const newPhone = `${country.code} ${currentDigits}`.trim();
-                          setWhatsappPhone(newPhone);
-                          const clean = newPhone.replace(/[^0-9]/g, '');
-                          const newWaUrl = clean
-                            ? `https://wa.me/${clean}?text=${encodeURIComponent(whatsappMessage || 'Hola Raul, deseo consultar por servicios de Educom-Tec')}`
-                            : '';
-                          
-                          // Also sync into socials if whatsapp row exists
-                          const updatedSocials = draftProfile.socials.map((s) => {
-                            if (s.name.toLowerCase().includes('whatsapp') || s.name.toLowerCase().includes('teléfono')) {
-                              return { ...s, url: newWaUrl };
-                            }
-                            return s;
-                          });
-
-                          setDraftProfile({
-                            ...draftProfile,
-                            whatsapp: newWaUrl,
-                            whatsappNumber: newPhone,
-                            socials: updatedSocials,
-                          });
-                          showToast(`Código ${country.name} (${country.code}) aplicado a WhatsApp`);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#121315] hover:bg-[#202326] border border-[#2d3134] hover:border-[#25D366]/50 text-zinc-300 hover:text-white text-xs font-mono transition-colors cursor-pointer active:scale-95"
-                      >
-                        <span className="text-sm">{country.flag}</span>
-                        <span className="font-bold text-[#25D366]">{country.code}</span>
-                        <span className="text-[10px] text-zinc-400">{country.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Tu Número de Teléfono / WhatsApp
-                    </label>
-                    <input
-                      type="text"
-                      value={whatsappPhone}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setWhatsappPhone(val);
-                        const clean = val.replace(/[^0-9]/g, '');
-                        const newUrl = clean
-                          ? `https://wa.me/${clean}?text=${encodeURIComponent(whatsappMessage || 'Hola Raul, deseo consultar por servicios de Educom-Tec')}`
-                          : '';
-
-                        const updatedSocials = draftProfile.socials.map((s) => {
-                          if (s.name.toLowerCase().includes('whatsapp') || s.name.toLowerCase().includes('teléfono')) {
-                            return { ...s, url: newUrl };
-                          }
-                          return s;
-                        });
-
-                        setDraftProfile({
-                          ...draftProfile,
-                          whatsapp: newUrl,
-                          whatsappNumber: val,
-                          socials: updatedSocials,
-                        });
-                      }}
-                      placeholder="Ej: +58 412 1234567 o +54 9 11 1234 5678"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
-                    />
-                    <span className="text-[11px] font-mono text-zinc-400 mt-1 block">
-                      Escribe tu número con el signo + y código de país (ej: +58 para Venezuela, +57 para Colombia).
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                      Mensaje Predeterminado del Chat
-                    </label>
-                    <input
-                      type="text"
-                      value={whatsappMessage}
-                      onChange={(e) => {
-                        setWhatsappMessage(e.target.value);
-                        const clean = whatsappPhone.replace(/[^0-9]/g, '');
-                        if (clean) {
-                          const newUrl = `https://wa.me/${clean}?text=${encodeURIComponent(e.target.value)}`;
-                          const updatedSocials = draftProfile.socials.map((s) => {
-                            if (s.name.toLowerCase().includes('whatsapp') || s.name.toLowerCase().includes('teléfono')) {
-                              return { ...s, url: newUrl };
-                            }
-                            return s;
-                          });
-                          setDraftProfile({
-                            ...draftProfile,
-                            whatsapp: newUrl,
-                            socials: updatedSocials,
-                          });
-                        }
-                      }}
-                      placeholder="Hola Raul, deseo consultar por servicios de Educom-Tec"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
-                    />
-                    <span className="text-[11px] font-mono text-zinc-400 mt-1 block">
-                      Texto que tu cliente verá listo para enviar al presionar tu botón de WhatsApp.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Generated URL & Direct Test Button */}
-                <div className="p-3.5 rounded-xl bg-[#121315] border border-[#2d3134] flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="w-full sm:flex-1 truncate">
-                    <span className="text-[10px] font-mono text-zinc-500 block uppercase font-bold">
-                      Enlace wa.me generado automáticamente:
-                    </span>
-                    <span className="text-xs font-mono text-emerald-400 truncate block font-medium">
-                      {draftProfile.whatsapp ||
-                        (whatsappPhone.replace(/[^0-9]/g, '')
-                          ? `https://wa.me/${whatsappPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsappMessage)}`
-                          : 'Pendiente por ingresar número telefónico...')}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const clean = whatsappPhone.replace(/[^0-9]/g, '');
-                      const url =
-                        draftProfile.whatsapp ||
-                        (clean
-                          ? `https://wa.me/${clean}?text=${encodeURIComponent(whatsappMessage)}`
-                          : null);
-                      if (!url) {
-                        showToast('Por favor escribe tu número antes de probar el enlace.');
-                        return;
-                      }
-                      window.open(url, '_blank');
-                    }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#25D366]/20 hover:bg-[#25D366]/30 text-[#25D366] text-xs font-mono font-bold transition-all border border-[#25D366]/40 cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Probar Enlace WhatsApp</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Email Section */}
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-4">
-                <div>
-                  <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
-                    Correo Electrónico Principal
-                  </label>
-                  <input
-                    type="email"
-                    value={draftProfile.email}
-                    onChange={(e) => setDraftProfile({ ...draftProfile, email: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#2d3134] bg-[#121315] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
-                  />
-                  <span className="text-[11px] font-mono text-zinc-500 mt-1 block">
-                    A este correo se envían las consultas y es el que se copia con 1-clic en la Slide 04.
-                  </span>
-                </div>
-              </div>
-
-              {/* Social Networks Management */}
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-bold font-syne text-white uppercase tracking-wider">
-                      Redes Sociales & Enlaces Personalizados
-                    </h4>
-                    <p className="text-xs text-zinc-400 font-mono">
-                      Agrega perfiles de Instagram, Facebook, LinkedIn, GitHub, YouTube o cualquier enlace web.
-                    </p>
-                  </div>
-
-                  {!isAddingSocial && (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingSocial(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs tracking-wider transition-all cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>+ Añadir Red Social</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Quick Presets Buttons */}
-                <div className="space-y-2">
-                  <span className="text-[11px] font-mono text-zinc-400 block font-semibold">
-                    Atajos rápidos para agregar redes populares:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddSocialNetwork('Instagram', 'https://instagram.com/tu_usuario', 'Instagram')
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-pink-400 hover:text-pink-300 border border-[#2d3134] text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      <Instagram className="w-3.5 h-3.5" />
-                      <span>+ Instagram</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddSocialNetwork('Facebook', 'https://facebook.com/tu_pagina', 'Facebook')
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-blue-400 hover:text-blue-300 border border-[#2d3134] text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      <Facebook className="w-3.5 h-3.5" />
-                      <span>+ Facebook</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddSocialNetwork('LinkedIn', 'https://linkedin.com/in/tu_perfil', 'Linkedin')
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-sky-400 hover:text-sky-300 border border-[#2d3134] text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                      <span>+ LinkedIn</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddSocialNetwork('YouTube', 'https://youtube.com/@tu_canal', 'Youtube')
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-red-400 hover:text-red-300 border border-[#2d3134] text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      <Youtube className="w-3.5 h-3.5" />
-                      <span>+ YouTube</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddSocialNetwork('X / Twitter', 'https://x.com/tu_usuario', 'Twitter')
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-zinc-300 hover:text-white border border-[#2d3134] text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      <Twitter className="w-3.5 h-3.5" />
-                      <span>+ X (Twitter)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form to add custom social */}
-                {isAddingSocial && (
-                  <div className="p-4 rounded-xl bg-[#121315] border border-[#00c2b2]/40 space-y-3 animate-fadeIn">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-[#00c2b2] uppercase">
-                        + Nueva Red Social o Enlace
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingSocial(false)}
-                        className="text-zinc-500 hover:text-zinc-300 text-xs font-mono cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
+                      <div>
+                        <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                          Mensaje Predeterminado del Chat
+                        </label>
+                        <input
+                          type="text"
+                          value={whatsappMessage}
+                          onChange={(e) => setWhatsappMessage(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#25D366]"
+                        />
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                          Nombre de la Red (ej: Instagram, Facebook, TikTok)
-                        </label>
+                    <div>
+                      <label className="block text-xs font-mono font-bold text-zinc-300 mb-1.5 uppercase">
+                        Correo Electrónico Principal
+                      </label>
+                      <input
+                        type="email"
+                        value={draftProfile.email}
+                        onChange={(e) => setDraftProfile({ ...draftProfile, email: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#262d3a] bg-[#0b0e14] text-white font-mono text-sm focus:outline-hidden focus:border-[#00c2b2]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Social Networks */}
+                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="text-sm font-bold font-syne text-white uppercase tracking-wider">
+                        Redes Sociales & Enlaces ({draftProfile.socials.length})
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAddSocialNetwork('Instagram', 'https://instagram.com/tu_usuario', 'Instagram')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-pink-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                        >
+                          <Instagram className="w-3.5 h-3.5" /> + Instagram
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddSocialNetwork('Facebook', 'https://facebook.com/tu_pagina', 'Facebook')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-blue-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                        >
+                          <Facebook className="w-3.5 h-3.5" /> + Facebook
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddSocialNetwork('YouTube', 'https://youtube.com/@tu_canal', 'Youtube')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b26] text-red-400 border border-[#262d3a] text-xs font-mono cursor-pointer"
+                        >
+                          <Youtube className="w-3.5 h-3.5" /> + YouTube
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingSocial(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Otra Red
+                        </button>
+                      </div>
+                    </div>
+
+                    {isAddingSocial && (
+                      <div className="p-4 rounded-xl bg-[#0b0e14] border border-[#00c2b2]/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <input
                           type="text"
                           value={newSocialName}
                           onChange={(e) => setNewSocialName(e.target.value)}
-                          placeholder="Ej: Instagram Personal"
-                          className="w-full px-3 py-2 rounded-lg bg-[#181a1b] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
+                          placeholder="Nombre (ej: LinkedIn, TikTok)"
+                          className="px-3 py-2 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
                         />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                          Dirección URL (https://...)
-                        </label>
                         <input
                           type="url"
                           value={newSocialUrl}
                           onChange={(e) => setNewSocialUrl(e.target.value)}
-                          placeholder="https://instagram.com/tu_cuenta"
-                          className="w-full px-3 py-2 rounded-lg bg-[#181a1b] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
+                          placeholder="https://..."
+                          className="px-3 py-2 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
                         />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingSocial(false)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-white cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAddSocialNetwork(newSocialName, newSocialUrl, 'Globe')}
-                        className="px-4 py-1.5 rounded-lg bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold text-xs uppercase cursor-pointer"
-                      >
-                        Guardar Red Social
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* List of current socials */}
-                <div className="space-y-3">
-                  <span className="text-[11px] font-mono text-zinc-400 block font-semibold">
-                    Redes y Enlaces Actualmente Configurados ({draftProfile.socials.length}):
-                  </span>
-                  {draftProfile.socials.map((social, sIdx) => {
-                    const isWa = social.name.toLowerCase().includes('whatsapp');
-                    const isIg = social.name.toLowerCase().includes('instagram');
-                    const isFb = social.name.toLowerCase().includes('facebook');
-                    const isYt = social.name.toLowerCase().includes('youtube');
-                    const isTw = social.name.toLowerCase().includes('twitter') || social.name.toLowerCase().includes('x');
-
-                    return (
-                      <div
-                        key={sIdx}
-                        className="p-3.5 rounded-xl bg-[#121315] border border-[#2d3134] flex flex-col sm:flex-row items-center gap-3"
-                      >
-                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                          <div
-                            className={`p-2 rounded-lg border ${
-                              isWa
-                                ? 'bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30'
-                                : isIg
-                                ? 'bg-pink-500/10 text-pink-400 border-pink-500/30'
-                                : isFb
-                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                                : isYt
-                                ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                                : isTw
-                                ? 'bg-zinc-800 text-zinc-200 border-zinc-700'
-                                : 'bg-[#181a1b] text-[#00c2b2] border-[#2d3134]'
-                            }`}
-                          >
-                            {isWa ? (
-                              <MessageCircle className="w-4 h-4 fill-current" />
-                            ) : isIg ? (
-                              <Instagram className="w-4 h-4" />
-                            ) : isFb ? (
-                              <Facebook className="w-4 h-4" />
-                            ) : isYt ? (
-                              <Youtube className="w-4 h-4" />
-                            ) : isTw ? (
-                              <Twitter className="w-4 h-4" />
-                            ) : (
-                              <Globe className="w-4 h-4" />
-                            )}
-                          </div>
-
-                          <input
-                            type="text"
-                            value={social.name}
-                            onChange={(e) => {
-                              const updatedSocials = [...draftProfile.socials];
-                              updatedSocials[sIdx] = { ...updatedSocials[sIdx], name: e.target.value };
-                              setDraftProfile({ ...draftProfile, socials: updatedSocials });
-                            }}
-                            className="w-full sm:w-44 px-3 py-1.5 rounded-lg bg-[#181a1b] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
-                            placeholder="Nombre red"
-                          />
-                        </div>
-
-                        <div className="flex-1 w-full">
-                          {isWa ? (
-                            <div className="space-y-1">
-                              <input
-                                type="text"
-                                value={
-                                  social.url.startsWith('https://wa.me/')
-                                    ? (whatsappPhone || social.url.split('?')[0].replace('https://wa.me/', '+'))
-                                    : social.url
-                                }
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  let formatted = val;
-                                  const cleanDigits = val.replace(/[^0-9]/g, '');
-                                  if (cleanDigits) {
-                                    formatted = `https://wa.me/${cleanDigits}${
-                                      whatsappMessage.trim() ? `?text=${encodeURIComponent(whatsappMessage.trim())}` : ''
-                                    }`;
-                                    setWhatsappPhone(val);
-                                  }
-                                  const updatedSocials = [...draftProfile.socials];
-                                  updatedSocials[sIdx] = { ...updatedSocials[sIdx], url: formatted };
-                                  setDraftProfile({
-                                    ...draftProfile,
-                                    socials: updatedSocials,
-                                    whatsapp: formatted.startsWith('https://wa.me/') ? formatted : draftProfile.whatsapp,
-                                    whatsappNumber: val,
-                                  });
-                                }}
-                                className="w-full px-3 py-1.5 rounded-lg bg-[#181a1b] border border-[#25D366]/40 text-xs font-mono text-white focus:outline-hidden focus:border-[#25D366]"
-                                placeholder="Escribe tu número (ej: +58 412 1234567) o enlace wa.me"
-                              />
-                              <span className="text-[10px] font-mono text-[#25D366] block">
-                                📱 Introduce tu número con código de país (ej: +58...). O si prefieres, elimina esta fila con la papelera de la derecha.
-                              </span>
-                            </div>
-                          ) : (
-                            <input
-                              type="text"
-                              value={social.url}
-                              onChange={(e) => {
-                                const updatedSocials = [...draftProfile.socials];
-                                updatedSocials[sIdx] = { ...updatedSocials[sIdx], url: e.target.value };
-                                setDraftProfile({ ...draftProfile, socials: updatedSocials });
-                              }}
-                              className="w-full px-3 py-1.5 rounded-lg bg-[#181a1b] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
-                              placeholder={
-                                isIg
-                                  ? 'https://instagram.com/tu_usuario'
-                                  : isFb
-                                  ? 'https://facebook.com/tu_pagina'
-                                  : isYt
-                                  ? 'https://youtube.com/@tu_canal'
-                                  : isTw
-                                  ? 'https://x.com/tu_usuario'
-                                  : 'https://...'
-                              }
-                            />
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                          {social.url && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const targetUrl = social.url.startsWith('http')
-                                  ? social.url
-                                  : `https://wa.me/${social.url.replace(/[^0-9]/g, '')}`;
-                                window.open(targetUrl, '_blank');
-                              }}
-                              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-[#232628] transition-colors cursor-pointer"
-                              title="Visitar enlace"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-
+                        <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteSocialNetwork(sIdx);
+                            onClick={() => handleAddSocialNetwork(newSocialName, newSocialUrl, 'Globe')}
+                            className="flex-1 px-3 py-2 rounded-lg bg-[#00c2b2] text-[#0b0e14] font-syne font-bold text-xs cursor-pointer"
+                          >
+                            Agregar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingSocial(false)}
+                            className="px-3 py-2 rounded-lg bg-[#161b26] text-zinc-400 text-xs font-mono cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5">
+                      {draftProfile.socials.map((social, sIdx) => (
+                        <div
+                          key={sIdx}
+                          className="p-3.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] flex flex-col sm:flex-row items-center gap-3"
+                        >
+                          <div className="flex items-center gap-2 w-full sm:w-48 shrink-0">
+                            <Globe className="w-4 h-4 text-[#00c2b2] shrink-0" />
+                            <input
+                              type="text"
+                              value={social.name}
+                              onChange={(e) => {
+                                const updatedSocials = [...draftProfile.socials];
+                                updatedSocials[sIdx] = { ...updatedSocials[sIdx], name: e.target.value };
+                                setDraftProfile({ ...draftProfile, socials: updatedSocials });
+                              }}
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-white"
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            value={social.url}
+                            onChange={(e) => {
+                              const updatedSocials = [...draftProfile.socials];
+                              updatedSocials[sIdx] = { ...updatedSocials[sIdx], url: e.target.value };
+                              setDraftProfile({ ...draftProfile, socials: updatedSocials });
                             }}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/15 border border-transparent hover:border-red-500/30 transition-all cursor-pointer active:scale-90"
-                            title={`Eliminar "${social.name}"`}
-                            aria-label={`Eliminar ${social.name}`}
+                            className="flex-1 w-full px-3 py-1.5 rounded-lg bg-[#12161f] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSocialNetwork(sIdx)}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-4 border-t border-[#2d3134] flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <span className="text-[11px] font-mono text-zinc-400">
-                    💡 Todos los cambios se guardan localmente y se respaldan en la nube.
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateContact(draftProfile.email, draftProfile.whatsapp || '')}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase tracking-wider text-xs transition-all shadow-md cursor-pointer"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Canales, Redes & WhatsApp</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 5: EXPERIENCE */}
-          {/* ========================================================= */}
-          {activeTab === 'experience' && (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-base font-bold font-syne text-white">
-                    Historial Profesional & Trayectoria
-                  </h3>
-                  <p className="text-xs text-zinc-400 font-mono">
-                    Puestos y roles que aparecen en la cronología laboral de la Slide 03.
-                  </p>
-                </div>
-                {!isAddingExp && editingExpIdx === null && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingExp(true);
-                      setExpForm({ role: '', company: '', period: '', description: '' });
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs tracking-wider transition-all cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 stroke-[2.5]" />
-                    <span>+ Añadir Posición</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Form to add or edit experience */}
-              {(isAddingExp || editingExpIdx !== null) && (
-                <div className="p-5 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-4 animate-fadeIn">
-                  <span className="text-xs font-mono font-bold uppercase text-[#00c2b2] block">
-                    {isAddingExp ? '+ Nueva Posición Laboral' : 'Editar Posición'}
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-mono text-zinc-400 mb-1">Rol / Cargo</label>
-                      <input
-                        type="text"
-                        value={expForm.role}
-                        onChange={(e) => setExpForm({ ...expForm, role: e.target.value })}
-                        placeholder="Analista de Soporte TI"
-                        className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
-                      />
+                      ))}
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-mono text-zinc-400 mb-1">Empresa / Firma</label>
-                      <input
-                        type="text"
-                        value={expForm.company}
-                        onChange={(e) => setExpForm({ ...expForm, company: e.target.value })}
-                        placeholder="Educom-Tec — Soluciones Informáticas"
-                        className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
-                      />
+
+                    <div className="pt-4 border-t border-[#1f2633] flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateContact(draftProfile.email, draftProfile.whatsapp || '')}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase tracking-wider text-xs shadow-md cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Guardar Contacto, Redes & WhatsApp</span>
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-mono text-zinc-400 mb-1">Período</label>
-                      <input
-                        type="text"
-                        value={expForm.period}
-                        onChange={(e) => setExpForm({ ...expForm, period: e.target.value })}
-                        placeholder="2022 — Presente"
-                        className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">Descripción de Funciones</label>
-                    <textarea
-                      rows={3}
-                      value={expForm.description}
-                      onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
-                      placeholder="Responsabilidades técnicas, logros y tecnologías manejadas..."
-                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden"
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingExp(false);
-                        setEditingExpIdx(null);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs font-mono bg-[#232628] hover:bg-[#2d3134] text-zinc-300 cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveExperience}
-                      className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Guardar</span>
-                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Experience list */}
-              <div className="space-y-3">
-                {draftProfile.experience.map((exp, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-2xl bg-[#181a1b] border border-[#2d3134] flex flex-col sm:flex-row sm:items-start justify-between gap-4"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-syne font-bold text-white text-sm">{exp.role}</h4>
-                        <span className="text-[11px] font-mono text-[#00c2b2] font-semibold">{exp.period}</span>
-                      </div>
-                      <p className="text-xs font-mono text-[#e06b3a] mt-0.5">{exp.company}</p>
-                      <p className="text-xs text-zinc-300 mt-2 leading-relaxed">{exp.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingExpIdx(idx);
-                          setExpForm({ ...exp });
-                          setIsAddingExp(false);
-                        }}
-                        className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-[#232628] transition-colors cursor-pointer"
-                        title="Editar posición"
-                      >
-                        <Edit2 className="w-4 h-4 text-[#00c2b2]" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteExperience(idx)}
-                        className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
-                        title="Eliminar posición"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              {/* ========================================================= */}
+              {/* TAB 7: NOCODB DATABASE, EXPORT & SECURITY */}
+              {/* ========================================================= */}
+              {activeTab === 'security' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div>
+                    <h2 className="text-xl font-bold font-syne text-white">
+                      Base de Datos NocoDB Cloud, Exportación HTML & Seguridad
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Configura la sincronización en tiempo real con NocoDB Cloud, descarga tus páginas independientes o cambia tu clave.
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* ========================================================= */}
-          {/* TAB 4 (o Tab Skills): STACK TECNOLÓGICO & DISCIPLINAS */}
-          {/* ========================================================= */}
-          {activeTab === 'skills' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold font-syne text-white">
-                    Stack Tecnológico & Disciplinas
-                  </h3>
-                  <p className="text-xs text-zinc-400 font-mono">
-                    Edita, agrega y personaliza las disciplinas de soporte TI, desarrollo, infraestructura y tecnologías clave mostradas en la página.
-                  </p>
-                </div>
+                  {/* NocoDB Cloud Card */}
+                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#00c2b2]/40 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#00c2b2] animate-pulse" />
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2]">
+                          Base de Datos Principal: NocoDB Cloud (Conectada)
+                        </span>
+                      </div>
+                      <a
+                        href={`${nocoConfig.baseUrl}/#/nc/${nocoConfig.baseId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-mono text-[#00c2b2] hover:underline"
+                      >
+                        <span>Abrir Base en NocoDB</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('profile')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#232628] hover:bg-[#2d3134] text-zinc-300 hover:text-white text-xs font-mono transition-colors cursor-pointer border border-[#2d3134] shrink-0"
-                >
-                  <span>&larr; Volver a Sobre Mí & Perfil</span>
-                </button>
-              </div>
-
-              {/* Add Skill Category */}
-              <div className="p-4 rounded-2xl bg-[#181a1b] border border-[#2d3134] flex flex-col sm:flex-row items-center gap-3">
-                <input
-                  type="text"
-                  value={newSkillCatName}
-                  onChange={(e) => setNewSkillCatName(e.target.value)}
-                  placeholder="Nombre de nueva categoría o disciplina (ej: Redes & MikroTik, Cloud & DevOps)"
-                  className="flex-1 w-full px-3.5 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddSkillCategory}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>+ Crear Categoría</span>
-                </button>
-              </div>
-
-              {/* Skills Groups Grid */}
-              <div className="space-y-4">
-                {draftProfile.skills.map((group, gIdx) => (
-                  <div key={gIdx} className="p-5 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#2d3134]">
-                      {editingSkillCatIdx === gIdx ? (
-                        <div className="flex items-center gap-2 flex-1 mr-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          URL Servidor NocoDB
+                        </label>
+                        <input
+                          type="text"
+                          value={nocoConfig.baseUrl}
+                          onChange={(e) => setNocoConfig({ ...nocoConfig, baseUrl: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          Base ID (Proyecto)
+                        </label>
+                        <input
+                          type="text"
+                          value={nocoConfig.baseId}
+                          onChange={(e) => setNocoConfig({ ...nocoConfig, baseId: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          API Token (xc-token)
+                        </label>
+                        <input
+                          type="password"
+                          value={nocoConfig.apiToken}
+                          onChange={(e) => setNocoConfig({ ...nocoConfig, apiToken: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          Tabla Productos (ID)
+                        </label>
+                        <input
+                          type="text"
+                          value={nocoConfig.productsTableId}
+                          onChange={(e) => setNocoConfig({ ...nocoConfig, productsTableId: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                          Tablas Categorías / Config (IDs)
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
-                            value={editingSkillCatName}
-                            onChange={(e) => setEditingSkillCatName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSaveSkillCategoryName(gIdx);
-                              } else if (e.key === 'Escape') {
-                                setEditingSkillCatIdx(null);
-                                setEditingSkillCatName('');
-                              }
-                            }}
-                            className="flex-1 px-2.5 py-1 rounded-lg bg-[#121315] border border-[#00c2b2] text-xs font-mono font-bold text-white uppercase focus:outline-hidden"
-                            autoFocus
+                            value={nocoConfig.categoriesTableId}
+                            onChange={(e) => setNocoConfig({ ...nocoConfig, categoriesTableId: e.target.value })}
+                            className="w-full px-2.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleSaveSkillCategoryName(gIdx)}
-                            className="p-1 rounded-lg bg-[#00c2b2] text-[#121315] hover:bg-[#00d6c4] cursor-pointer"
-                            title="Guardar nombre"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingSkillCatIdx(null);
-                              setEditingSkillCatName('');
-                            }}
-                            className="p-1 rounded-lg text-zinc-400 hover:text-white cursor-pointer"
-                            title="Cancelar"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <input
+                            type="text"
+                            value={nocoConfig.configTableId}
+                            onChange={(e) => setNocoConfig({ ...nocoConfig, configTableId: e.target.value })}
+                            className="w-full px-2.5 py-2 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-zinc-300"
+                          />
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-syne font-bold text-white text-sm uppercase tracking-wider">
-                            {group.category}
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditSkillCategory(gIdx, group.category)}
-                            className="p-1 rounded-md text-zinc-500 hover:text-[#00c2b2] transition-colors cursor-pointer"
-                            title="Renombrar categoría"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSkillCategory(gIdx)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer shrink-0"
-                        title="Eliminar categoría entera"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      </div>
                     </div>
 
-                    {/* Skill chips */}
-                    <div className="flex flex-wrap gap-2">
-                      {group.items.map((item, iIdx) => (
-                        <span
-                          key={iIdx}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-200"
-                        >
-                          <span>{item}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSkillItem(gIdx, iIdx)}
-                            className="text-zinc-500 hover:text-red-400 cursor-pointer ml-1"
-                            title="Eliminar habilidad"
-                          >
-                            &times;
-                          </button>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        disabled={isSyncingNoco}
+                        onClick={handleManualNocoSync}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>
+                          {isSyncingNoco
+                            ? 'Sincronizando con NocoDB...'
+                            : 'Guardar & Sincronizar Todo con NocoDB'}
                         </span>
-                      ))}
-                    </div>
-
-                    {/* Add single skill item */}
-                    <div className="flex items-center gap-2 pt-2">
-                      <input
-                        type="text"
-                        value={newSkillItem.catIdx === gIdx ? newSkillItem.text : ''}
-                        onChange={(e) => setNewSkillItem({ catIdx: gIdx, text: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddSkillItem(gIdx);
-                          }
-                        }}
-                        placeholder={`+ Agregar habilidad a ${group.category}...`}
-                        className="flex-1 px-3 py-1.5 rounded-lg bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleAddSkillItem(gIdx)}
-                        className="px-3 py-1.5 rounded-lg bg-[#232628] hover:bg-[#2d3134] text-[#00c2b2] font-mono text-xs cursor-pointer"
-                      >
-                        Añadir
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* ========================================================= */}
-          {/* TAB 7: SECURITY & RESET */}
-          {/* ========================================================= */}
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base font-bold font-syne text-white">
-                  Base de Datos NocoDB, Seguridad & Opciones de Sistema
-                </h3>
-                <p className="text-xs text-zinc-400 font-mono">
-                  Gestiona la conexión en vivo con NocoDB Cloud, tu clave de administrador o el respaldo general.
-                </p>
-              </div>
+                  {/* Standalone HTML Export Card */}
+                  <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
+                    <h3 className="text-sm font-bold font-syne text-white uppercase tracking-wider">
+                      Descarga de Páginas Independientes (index.html y admin.html)
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Si subes tus archivos a Cloudflare Pages, GitHub Pages o los usas localmente en tu PC, puedes descargar ambos archivos compilados con tus últimos cambios.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => downloadStandaloneHtml('index.html')}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Descargar index.html (Web Pública)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadStandaloneAdminHtml()}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1f2633] border border-[#00c2b2]/40 text-[#00c2b2] text-xs font-mono font-bold cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Descargar admin.html (Panel Admin Separado)</span>
+                      </button>
+                    </div>
+                  </div>
 
-              {/* NocoDB Cloud Connection Card */}
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#00c2b2]/40 space-y-4 max-w-2xl">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#00c2b2] animate-pulse" />
-                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2]">
-                      Base de Datos Principal: NocoDB Cloud (Conectada)
-                    </span>
-                  </div>
-                  <a
-                    href={`${nocoConfig.baseUrl}/#/nc/${nocoConfig.baseId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#00c2b2] hover:underline"
-                  >
-                    <span>Abrir Base en NocoDB</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Change password card */}
+                    <div className="p-6 rounded-2xl bg-[#12161f] border border-[#1f2633] space-y-4">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
+                        Modificar Clave de Acceso Admin
+                      </span>
+                      <form onSubmit={handleChangePassword} className="space-y-4">
+                        <div>
+                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                            Nueva Contraseña
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Mínimo 4 caracteres..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                            Confirmar Nueva Contraseña
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Repite la nueva contraseña..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0b0e14] border border-[#262d3a] text-xs font-mono text-white"
+                          />
+                        </div>
+                        {passwordError && <p className="text-xs font-mono text-red-400">{passwordError}</p>}
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Actualizar Contraseña</span>
+                        </button>
+                      </form>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      URL Servidor NocoDB
-                    </label>
-                    <input
-                      type="text"
-                      value={nocoConfig.baseUrl}
-                      onChange={(e) => setNocoConfig({ ...nocoConfig, baseUrl: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Base ID (Proyecto)
-                    </label>
-                    <input
-                      type="text"
-                      value={nocoConfig.baseId}
-                      onChange={(e) => setNocoConfig({ ...nocoConfig, baseId: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      API Token (xc-token)
-                    </label>
-                    <input
-                      type="password"
-                      value={nocoConfig.apiToken}
-                      onChange={(e) => setNocoConfig({ ...nocoConfig, apiToken: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Tabla Productos (ID)
-                    </label>
-                    <input
-                      type="text"
-                      value={nocoConfig.productsTableId}
-                      onChange={(e) => setNocoConfig({ ...nocoConfig, productsTableId: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Tabla Categorías / Config (IDs)
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={nocoConfig.categoriesTableId}
-                        onChange={(e) => setNocoConfig({ ...nocoConfig, categoriesTableId: e.target.value })}
-                        title="ID Tabla Categorías"
-                        className="w-full px-2.5 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
-                      />
-                      <input
-                        type="text"
-                        value={nocoConfig.configTableId}
-                        onChange={(e) => setNocoConfig({ ...nocoConfig, configTableId: e.target.value })}
-                        title="ID Tabla Configuración"
-                        className="w-full px-2.5 py-2 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-[#00c2b2]"
-                      />
+                    {/* Reset factory */}
+                    <div className="p-6 rounded-2xl bg-red-950/20 border border-red-900/40 space-y-3 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-red-400 font-syne font-bold text-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span>Zona de Peligro / Restablecer de Fábrica</span>
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Restaura todos los productos, categorías y perfil a los datos iniciales de fábrica de Educom-Tec en este navegador.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleResetFactory}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-900/40 hover:bg-red-800/60 text-red-200 border border-red-700/50 font-mono text-xs cursor-pointer transition-colors self-start"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restablecer Datos de Fábrica</span>
+                      </button>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    disabled={isSyncingNoco}
-                    onClick={async () => {
-                      setIsSyncingNoco(true);
-                      try {
-                        saveNocoDBConfig(nocoConfig);
-                        await Promise.all([
-                          syncAllProductsToCloud(draftProducts),
-                          syncCategoriesToCloud(draftCategories),
-                          saveProfileToCloud(draftProfile),
-                        ]);
-                        showToast('Conexión guardada y datos sincronizados con NocoDB Cloud.');
-                      } catch {
-                        showToast('Error al sincronizar con NocoDB. Verifica las credenciales.');
-                      } finally {
-                        setIsSyncingNoco(false);
-                      }
-                    }}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{isSyncingNoco ? 'Sincronizando con NocoDB...' : 'Guardar & Sincronizar Todo con NocoDB'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Change password card */}
-              <div className="p-6 rounded-2xl bg-[#181a1b] border border-[#2d3134] space-y-4 max-w-lg">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c2b2] block">
-                  Modificar Clave de Acceso
-                </span>
-                <form onSubmit={handleChangePassword} className="space-y-4">
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Nueva Contraseña
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 4 caracteres..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                      Confirmar Nueva Contraseña
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repite la nueva contraseña..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#121315] border border-[#2d3134] text-xs font-mono text-white focus:outline-hidden focus:border-[#00c2b2]"
-                    />
-                  </div>
-
-                  {passwordError && (
-                    <p className="text-xs font-mono text-red-400">{passwordError}</p>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#121315] font-syne font-bold uppercase text-xs cursor-pointer"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>Actualizar Contraseña</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* Reset to factory defaults card */}
-              <div className="p-6 rounded-2xl bg-red-950/20 border border-red-900/40 space-y-3 max-w-lg">
-                <div className="flex items-center gap-2 text-red-400 font-syne font-bold text-sm">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>Zona de Peligro / Restablecer de Fábrica</span>
-                </div>
-                <p className="text-xs text-zinc-400 leading-relaxed font-normal">
-                  Si deseas eliminar todos los datos personalizados guardados en tu navegador y volver a la configuración original de Educom-Tec, puedes usar este botón.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleResetFactory}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-900/40 hover:bg-red-800/60 text-red-200 border border-red-700/50 font-mono text-xs cursor-pointer transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restablecer Datos de Fábrica</span>
-                </button>
-              </div>
+              )}
             </div>
-          )}
+          </main>
         </div>
 
         {/* Footer info bar */}
-        <div className="px-6 py-3 border-t border-[#2d3134] bg-[#181a1b] flex items-center justify-between text-xs font-mono text-zinc-500 shrink-0">
-          <span>Firmado & Autenticado: Raúl Eduardo Rodríguez // Educom-Tec</span>
+        <footer className="px-6 py-3 border-t border-[#1f2633] bg-[#0f131c] flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-zinc-500 shrink-0">
+          <span>Educom-Tec Admin Center (admin.html) • Raúl Eduardo Rodríguez</span>
           <span className="text-[#00c2b2] flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#00c2b2] animate-pulse" />
-            <span>Sincronizado con NocoDB Cloud (Base: {nocoConfig.baseId})</span>
+            <span>NocoDB Cloud Activo (Base: {nocoConfig.baseId})</span>
           </span>
-        </div>
+        </footer>
       </div>
     </div>
   );
