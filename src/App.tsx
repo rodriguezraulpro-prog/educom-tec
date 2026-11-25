@@ -154,7 +154,7 @@ export function App() {
     setIsDark((prev) => !prev);
   }, []);
 
-  // Cloud Synchronization (NocoDB Cloud Primary + Firestore Backup)
+  // Cloud Synchronization (Baserow Cloud Primary + Firestore Backup)
   useEffect(() => {
     let isMounted = true;
     (async () => {

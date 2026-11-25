@@ -12,56 +12,66 @@ import { ProductOrProject, UserProfile, ShowcaseCategory } from '../types';
 import { initialProducts, initialProfile, initialCategories } from '../data/portfolioData';
 
 // ============================================================================
-// NOCODB CLOUD CONFIGURATION (PRIMARY DATABASE)
+// BASEROW CLOUD CONFIGURATION (PRIMARY DATABASE)
 // ============================================================================
-export interface NocoDBConfig {
-  baseUrl: string;
+export interface BaserowConfig {
+  apiUrl: string;
+  webUrl: string;
   apiToken: string;
-  baseId: string;
-  productsTableId: string;
-  categoriesTableId: string;
-  configTableId: string;
+  databaseId: string;
+  tableId: string;
+  viewId: string;
 }
 
-const DEFAULT_NOCODB_CONFIG: NocoDBConfig = {
-  baseUrl: 'https://app.nocodb.com',
-  apiToken: 'nc_pat_Es9gtJwZzD9zRWDPaHjGNcb3iw9clhy9Fhzw1Wa2',
-  baseId: 'p5o3y3vw3iskoss',
-  productsTableId: 'mq57a9hs9m1rfnp',
-  categoriesTableId: 'msxxn938fxqef6d',
-  configTableId: 'm2817zasx5axp00',
+const ENV = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+
+const DEFAULT_BASEROW_CONFIG: BaserowConfig = {
+  apiUrl: ENV.VITE_BASEROW_API_URL || 'https://api.baserow.io',
+  webUrl: ENV.VITE_BASEROW_WEB_URL || 'https://baserow.io',
+  apiToken: ENV.VITE_BASEROW_API_TOKEN || 'MU5JCWPDkwteAEAdkWhLaWN3vO7H8Upk',
+  databaseId: ENV.VITE_BASEROW_DATABASE_ID || '614920',
+  tableId: ENV.VITE_BASEROW_TABLE_ID || '1300673',
+  viewId: ENV.VITE_BASEROW_VIEW_ID || '2604879',
 };
 
-const NOCODB_STORAGE_KEY = 'educom_nocodb_config_v1';
+const BASEROW_STORAGE_KEY = 'educom_baserow_config_v1';
 
-export function getNocoDBConfig(): NocoDBConfig {
-  if (typeof window === 'undefined') return DEFAULT_NOCODB_CONFIG;
+export function getBaserowConfig(): BaserowConfig {
+  if (typeof window === 'undefined') return DEFAULT_BASEROW_CONFIG;
   try {
-    const raw = localStorage.getItem(NOCODB_STORAGE_KEY);
-    if (!raw) return DEFAULT_NOCODB_CONFIG;
+    const raw = localStorage.getItem(BASEROW_STORAGE_KEY);
+    if (!raw) return DEFAULT_BASEROW_CONFIG;
     const parsed = JSON.parse(raw);
     return {
-      baseUrl: (parsed.baseUrl || DEFAULT_NOCODB_CONFIG.baseUrl).replace(/\/+$/, ''),
-      apiToken: parsed.apiToken || DEFAULT_NOCODB_CONFIG.apiToken,
-      baseId: parsed.baseId || DEFAULT_NOCODB_CONFIG.baseId,
-      productsTableId: parsed.productsTableId || DEFAULT_NOCODB_CONFIG.productsTableId,
-      categoriesTableId: parsed.categoriesTableId || DEFAULT_NOCODB_CONFIG.categoriesTableId,
-      configTableId: parsed.configTableId || DEFAULT_NOCODB_CONFIG.configTableId,
+      apiUrl: (parsed.apiUrl || DEFAULT_BASEROW_CONFIG.apiUrl).replace(/\/+$/, ''),
+      webUrl: (parsed.webUrl || DEFAULT_BASEROW_CONFIG.webUrl).replace(/\/+$/, ''),
+      apiToken: parsed.apiToken || DEFAULT_BASEROW_CONFIG.apiToken,
+      databaseId: String(parsed.databaseId || DEFAULT_BASEROW_CONFIG.databaseId).trim(),
+      tableId: String(parsed.tableId || DEFAULT_BASEROW_CONFIG.tableId).trim(),
+      viewId: String(parsed.viewId || DEFAULT_BASEROW_CONFIG.viewId).trim(),
     };
   } catch {
-    return DEFAULT_NOCODB_CONFIG;
+    return DEFAULT_BASEROW_CONFIG;
   }
 }
 
-export function saveNocoDBConfig(cfg: Partial<NocoDBConfig>): NocoDBConfig {
-  const merged: NocoDBConfig = {
-    ...getNocoDBConfig(),
+export function saveBaserowConfig(cfg: Partial<BaserowConfig>): BaserowConfig {
+  const merged: BaserowConfig = {
+    ...getBaserowConfig(),
     ...cfg,
   };
-  merged.baseUrl = merged.baseUrl.replace(/\/+$/, '');
+  merged.apiUrl = merged.apiUrl.replace(/\/+$/, '');
+  merged.webUrl = merged.webUrl.replace(/\/+$/, '');
+  merged.databaseId = String(merged.databaseId || '').trim();
+  merged.tableId = String(merged.tableId || '').trim();
+  merged.viewId = String(merged.viewId || '').trim();
+
+  // Clear cached schema when table config changes
+  fieldSchemaCache.delete(merged.tableId);
+
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(NOCODB_STORAGE_KEY, JSON.stringify(merged));
+      localStorage.setItem(BASEROW_STORAGE_KEY, JSON.stringify(merged));
     } catch {
       // Ignore storage error
     }
@@ -69,111 +79,186 @@ export function saveNocoDBConfig(cfg: Partial<NocoDBConfig>): NocoDBConfig {
   return merged;
 }
 
-// ============================================================================
-// NOCODB REST API HELPERS & CHUNKED PAYLOAD SERIALIZATION
-// ============================================================================
-const CHUNK_SIZE = 90000; // NocoDB LongText limit is 100,000 chars per column
+export function getBaserowTableWebUrl(cfg?: BaserowConfig): string {
+  const active = cfg || getBaserowConfig();
+  const base = `${active.webUrl}/database/${active.databaseId}/table/${active.tableId}`;
+  return active.viewId ? `${base}/${active.viewId}` : base;
+}
 
-function splitJsonPayload(data: unknown): {
-  payload_json: string;
-  payload_chunk_2: string;
-  payload_chunk_3: string;
-  payload_chunk_4: string;
-  payload_chunk_5: string;
-} {
-  const jsonStr = JSON.stringify(sanitizeForFirestore(data));
+// ============================================================================
+// BASEROW REST API HELPERS & DYNAMIC FIELD RESOLUTION
+// ============================================================================
+interface BaserowFieldSchema {
+  nameField: string;
+  notesField: string;
+  activeField: string | null;
+}
+
+const fieldSchemaCache = new Map<string, BaserowFieldSchema>();
+
+async function baserowRequest(
+  path: string,
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
+  body?: unknown,
+  overrideCfg?: BaserowConfig
+): Promise<any> {
+  const cfg = overrideCfg || getBaserowConfig();
+  const url = path.startsWith('http://') || path.startsWith('https://')
+    ? path
+    : `${cfg.apiUrl}${path}`;
+
+  const headers: Record<string, string> = {
+    Authorization: `Token ${cfg.apiToken}`,
+  };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return {};
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Baserow HTTP ${res.status}: ${text}`);
+  }
+  return text ? JSON.parse(text) : {};
+}
+
+async function resolveTableSchema(overrideCfg?: BaserowConfig): Promise<BaserowFieldSchema> {
+  const cfg = overrideCfg || getBaserowConfig();
+  const cached = fieldSchemaCache.get(cfg.tableId);
+  if (cached) return cached;
+
+  try {
+    const fields = await baserowRequest(
+      `/api/database/fields/table/${cfg.tableId}/`,
+      'GET',
+      undefined,
+      cfg
+    );
+    if (Array.isArray(fields) && fields.length > 0) {
+      const primaryText =
+        fields.find((f: any) => f.primary) ||
+        fields.find((f: any) => f.type === 'text') ||
+        fields[0];
+
+      const longText =
+        fields.find((f: any) => f.type === 'long_text') ||
+        fields.find(
+          (f: any) =>
+            (f.type === 'text' || f.type === 'long_text') && f.name !== primaryText?.name
+        );
+
+      const boolField = fields.find((f: any) => f.type === 'boolean') || null;
+
+      const resolved: BaserowFieldSchema = {
+        nameField: primaryText?.name || 'Nombre',
+        notesField: longText?.name || 'Notas',
+        activeField: boolField?.name || null,
+      };
+      fieldSchemaCache.set(cfg.tableId, resolved);
+      return resolved;
+    }
+  } catch (err) {
+    console.warn('Baserow field introspection fallback:', err);
+  }
+
   return {
-    payload_json: jsonStr.slice(0, CHUNK_SIZE),
-    payload_chunk_2: jsonStr.slice(CHUNK_SIZE, CHUNK_SIZE * 2) || '',
-    payload_chunk_3: jsonStr.slice(CHUNK_SIZE * 2, CHUNK_SIZE * 3) || '',
-    payload_chunk_4: jsonStr.slice(CHUNK_SIZE * 3, CHUNK_SIZE * 4) || '',
-    payload_chunk_5: jsonStr.slice(CHUNK_SIZE * 4, CHUNK_SIZE * 5) || '',
+    nameField: 'Nombre',
+    notesField: 'Notas',
+    activeField: 'Activo',
   };
 }
 
-function joinJsonPayload(row: Record<string, any>): any | null {
-  const combined =
-    (row.payload_json || '') +
-    (row.payload_chunk_2 || '') +
-    (row.payload_chunk_3 || '') +
-    (row.payload_chunk_4 || '') +
-    (row.payload_chunk_5 || '');
-  if (!combined || !combined.trim()) return null;
+interface BaserowRecordEnvelope<T = any> {
+  recordType: 'product' | 'categories' | 'profile' | 'settings';
+  id?: string;
+  orderIndex?: number;
+  updatedAt?: string;
+  data: T;
+}
+
+async function fetchAllBaserowRows(overrideCfg?: BaserowConfig): Promise<{
+  schema: BaserowFieldSchema;
+  rows: Record<string, any>[];
+}> {
+  const cfg = overrideCfg || getBaserowConfig();
+  const schema = await resolveTableSchema(cfg);
+  const rows: Record<string, any>[] = [];
+
+  let nextUrl: string | null = `/api/database/rows/table/${cfg.tableId}/?user_field_names=true&size=200`;
+  let guard = 0;
+
+  while (nextUrl && guard < 20) {
+    const data = await baserowRequest(nextUrl, 'GET', undefined, cfg);
+    if (Array.isArray(data.results)) {
+      rows.push(...data.results);
+    }
+    nextUrl = typeof data.next === 'string' && data.next.length > 0 ? data.next : null;
+    guard++;
+  }
+
+  return { schema, rows };
+}
+
+function parseEnvelope(row: Record<string, any>, schema: BaserowFieldSchema): BaserowRecordEnvelope | null {
+  const rawNotes = row[schema.notesField];
+  if (typeof rawNotes !== 'string' || !rawNotes.trim()) return null;
   try {
-    return JSON.parse(combined);
+    const parsed = JSON.parse(rawNotes);
+    if (parsed && typeof parsed === 'object' && parsed.recordType) {
+      return parsed as BaserowRecordEnvelope;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-async function nocoRequest(path: string, method = 'GET', body?: unknown): Promise<any> {
-  const cfg = getNocoDBConfig();
-  const res = await fetch(`${cfg.baseUrl}${path}`, {
-    method,
-    headers: {
-      'xc-token': cfg.apiToken,
-      'Content-Type': 'application/json',
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`NocoDB HTTP ${res.status}: ${text}`);
+function buildRowPayload(
+  schema: BaserowFieldSchema,
+  label: string,
+  envelope: BaserowRecordEnvelope
+): Record<string, any> {
+  const payload: Record<string, any> = {
+    [schema.nameField]: label,
+    [schema.notesField]: JSON.stringify(sanitizeForFirestore(envelope)),
+  };
+  if (schema.activeField) {
+    payload[schema.activeField] = true;
   }
-  return text ? JSON.parse(text) : {};
+  return payload;
 }
 
-function mapNocoRowToProduct(row: Record<string, any>, index: number): ProductOrProject {
-  const basePayload = (joinJsonPayload(row) || {}) as Partial<ProductOrProject>;
-  const safeImageUrl =
-    row.imageUrl && row.imageUrl !== '[BASE64_IN_PAYLOAD]'
-      ? row.imageUrl
-      : basePayload.imageUrl || 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80';
-
-  return {
-    id: row.product_id || basePayload.id || `prod-${row.Id || index + 1}`,
-    title: row.title || basePayload.title || 'Sistema sin título',
-    subtitle: row.subtitle ?? basePayload.subtitle ?? '',
-    category: row.category || basePayload.category || 'systems',
-    categoryLabel: row.categoryLabel || basePayload.categoryLabel || 'Sistemas Empresariales',
-    description: row.description ?? basePayload.description ?? '',
-    longDescription: row.longDescription ?? basePayload.longDescription ?? row.description ?? '',
-    imageUrl: safeImageUrl,
-    gallery: Array.isArray(basePayload.gallery) ? basePayload.gallery : [safeImageUrl],
-    tags: Array.isArray(basePayload.tags) ? basePayload.tags : ['Sistema', 'Educom-Tec'],
-    price: row.price ?? basePayload.price ?? 'Consultar',
-    status: (row.status || basePayload.status || 'Disponible') as ProductOrProject['status'],
-    demoUrl: row.demoUrl ?? basePayload.demoUrl ?? '',
-    features: Array.isArray(basePayload.features) ? basePayload.features : [],
-    technologies: Array.isArray(basePayload.technologies) ? basePayload.technologies : [],
-    year: row.year || basePayload.year || '2025',
-    deliverables: Array.isArray(basePayload.deliverables) ? basePayload.deliverables : [],
-    slideNumber: basePayload.slideNumber || String(index + 1).padStart(2, '0'),
-    themeColor: basePayload.themeColor || 'teal',
-    deckMetrics: Array.isArray(basePayload.deckMetrics) ? basePayload.deckMetrics : [],
-  };
-}
-
-function mapProductToNocoRow(product: ProductOrProject, orderIndex: number): Record<string, any> {
-  const rawImg = product.imageUrl || '';
-  const safeColumnImage = rawImg.length > 80000 ? '[BASE64_IN_PAYLOAD]' : rawImg;
-  return {
-    product_id: product.id,
-    title: product.title || '',
-    subtitle: product.subtitle || '',
-    category: product.category || '',
-    categoryLabel: product.categoryLabel || '',
-    price: product.price || '',
-    status: product.status || 'Disponible',
-    demoUrl: product.demoUrl || '',
-    imageUrl: safeColumnImage,
-    description: product.description || '',
-    longDescription: product.longDescription || '',
-    year: product.year || '2025',
-    order_index: orderIndex,
-    ...splitJsonPayload(product),
-  };
+export async function testBaserowConnection(overrideCfg?: BaserowConfig): Promise<{
+  ok: boolean;
+  rowCount: number;
+  fields: string[];
+  message: string;
+}> {
+  const cfg = overrideCfg || getBaserowConfig();
+  try {
+    fieldSchemaCache.delete(cfg.tableId);
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    const fields = [schema.nameField, schema.notesField, ...(schema.activeField ? [schema.activeField] : [])];
+    return {
+      ok: true,
+      rowCount: rows.length,
+      fields,
+      message: `Conectado a Baserow (Tabla ${cfg.tableId}): ${rows.length} registros activos • Columnas: ${fields.join(', ')}`,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      rowCount: 0,
+      fields: [],
+      message: err?.message || 'No se pudo conectar con Baserow. Verifica tu Token y Table ID.',
+    };
+  }
 }
 
 // ============================================================================
@@ -206,27 +291,63 @@ function sanitizeForFirestore<T>(data: T): T {
   return data;
 }
 
+function normalizeProduct(raw: Partial<ProductOrProject>, index: number): ProductOrProject {
+  const safeImageUrl =
+    raw.imageUrl ||
+    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80';
+
+  return {
+    id: raw.id || `prod-${index + 1}`,
+    title: raw.title || 'Sistema sin título',
+    subtitle: raw.subtitle ?? '',
+    category: raw.category || 'systems',
+    categoryLabel: raw.categoryLabel || 'Sistemas Empresariales',
+    description: raw.description ?? '',
+    longDescription: raw.longDescription ?? raw.description ?? '',
+    imageUrl: safeImageUrl,
+    gallery: Array.isArray(raw.gallery) && raw.gallery.length > 0 ? raw.gallery : [safeImageUrl],
+    tags: Array.isArray(raw.tags) ? raw.tags : ['Sistema', 'Educom-Tec'],
+    price: raw.price ?? 'Consultar',
+    status: (raw.status || 'Disponible') as ProductOrProject['status'],
+    demoUrl: raw.demoUrl ?? '',
+    features: Array.isArray(raw.features) ? raw.features : [],
+    technologies: Array.isArray(raw.technologies) ? raw.technologies : [],
+    year: raw.year || '2025',
+    deliverables: Array.isArray(raw.deliverables) ? raw.deliverables : [],
+    slideNumber: raw.slideNumber || String(index + 1).padStart(2, '0'),
+    themeColor: raw.themeColor || 'teal',
+    deckMetrics: Array.isArray(raw.deckMetrics) ? raw.deckMetrics : [],
+  };
+}
+
 // ============================================================================
-// PRODUCTS CRUD (NOCODB PRIMARY + FIRESTORE BACKUP)
+// PRODUCTS CRUD (BASEROW PRIMARY + FIRESTORE BACKUP)
 // ============================================================================
 
 export async function fetchProductsFromCloud(): Promise<ProductOrProject[]> {
-  const cfg = getNocoDBConfig();
   try {
-    const data = await nocoRequest(
-      `/api/v2/tables/${cfg.productsTableId}/records?limit=200&sort=order_index`
-    );
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
+    const { schema, rows } = await fetchAllBaserowRows();
+    const productEnvelopes: { orderIndex: number; data: Partial<ProductOrProject> }[] = [];
 
-    if (list.length === 0) {
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'product' && env.data) {
+        productEnvelopes.push({
+          orderIndex: typeof env.orderIndex === 'number' ? env.orderIndex : 999,
+          data: env.data,
+        });
+      }
+    }
+
+    if (productEnvelopes.length === 0) {
       await syncAllProductsToCloud(initialProducts);
       return initialProducts;
     }
 
-    list.sort((a, b) => (a.order_index ?? 999) - (b.order_index ?? 999));
-    return list.map((row, idx) => mapNocoRowToProduct(row, idx));
-  } catch (nocoErr) {
-    console.warn('NocoDB products fetch warning, checking Firestore backup:', nocoErr);
+    productEnvelopes.sort((a, b) => a.orderIndex - b.orderIndex);
+    return productEnvelopes.map((item, idx) => normalizeProduct(item.data, idx));
+  } catch (baserowErr) {
+    console.warn('Baserow products fetch warning, checking Firestore backup:', baserowErr);
     try {
       const productsRef = collection(db, PRODUCTS_COLLECTION);
       const snapshot = await getDocs(productsRef);
@@ -245,61 +366,77 @@ export async function fetchProductsFromCloud(): Promise<ProductOrProject[]> {
 }
 
 export async function saveProductToCloud(product: ProductOrProject): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const existingData = await nocoRequest(
-      `/api/v2/tables/${cfg.productsTableId}/records?limit=200`
-    );
-    const list: Record<string, any>[] = Array.isArray(existingData.list) ? existingData.list : [];
-    const existingRow = list.find((r) => r.product_id === product.id);
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    let existingRow: Record<string, any> | undefined;
+    let existingOrder = 0;
 
-    if (existingRow && existingRow.Id !== undefined) {
-      const rowPayload = {
-        Id: existingRow.Id,
-        ...mapProductToNocoRow(product, existingRow.order_index ?? 0),
-      };
-      await nocoRequest(`/api/v2/tables/${cfg.productsTableId}/records`, 'PATCH', rowPayload);
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'product' && (env.id === product.id || env.data?.id === product.id)) {
+        existingRow = row;
+        existingOrder = typeof env.orderIndex === 'number' ? env.orderIndex : 0;
+        break;
+      }
+    }
+
+    const rowPayload = buildRowPayload(schema, `PROD::${product.id} | ${product.title}`, {
+      recordType: 'product',
+      id: product.id,
+      orderIndex: existingOrder,
+      updatedAt: new Date().toISOString(),
+      data: product,
+    });
+
+    if (existingRow && existingRow.id !== undefined) {
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/${existingRow.id}/?user_field_names=true`,
+        'PATCH',
+        rowPayload,
+        cfg
+      );
     } else {
-      const rowPayload = mapProductToNocoRow(product, 0);
-      await nocoRequest(`/api/v2/tables/${cfg.productsTableId}/records`, 'POST', rowPayload);
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/?user_field_names=true`,
+        'POST',
+        rowPayload,
+        cfg
+      );
     }
   } catch (error) {
-    console.error('Error saving product to NocoDB:', error);
-  }
-
-  // Secondary backup to Firestore
-  try {
-    const docRef = doc(db, PRODUCTS_COLLECTION, product.id);
-    await setDoc(
-      docRef,
-      sanitizeForFirestore({
-        ...product,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
-  } catch {
-    // Ignore secondary backup error
+    console.error('Error saving product to Baserow:', error);
+    throw error;
+  } finally {
+    // Secondary backup to Firestore
+    try {
+      const docRef = doc(db, PRODUCTS_COLLECTION, product.id);
+      await setDoc(
+        docRef,
+        sanitizeForFirestore({
+          ...product,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+    } catch {
+      // Ignore secondary backup error
+    }
   }
 }
 
 export async function deleteProductFromCloud(productId: string): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const existingData = await nocoRequest(
-      `/api/v2/tables/${cfg.productsTableId}/records?limit=200`
-    );
-    const list: Record<string, any>[] = Array.isArray(existingData.list) ? existingData.list : [];
-    const matching = list.filter((r) => r.product_id === productId && r.Id !== undefined);
-    if (matching.length > 0) {
-      await nocoRequest(
-        `/api/v2/tables/${cfg.productsTableId}/records`,
-        'DELETE',
-        matching.map((r) => ({ Id: r.Id }))
-      );
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'product' && (env.id === productId || env.data?.id === productId)) {
+        await baserowRequest(`/api/database/rows/table/${cfg.tableId}/${row.id}/`, 'DELETE', undefined, cfg);
+      }
     }
   } catch (error) {
-    console.error('Error deleting product from NocoDB:', error);
+    console.error('Error deleting product from Baserow:', error);
   }
 
   try {
@@ -311,224 +448,204 @@ export async function deleteProductFromCloud(productId: string): Promise<void> {
 }
 
 export async function syncAllProductsToCloud(products: ProductOrProject[]): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const existingData = await nocoRequest(
-      `/api/v2/tables/${cfg.productsTableId}/records?limit=200`
-    );
-    const existingList: Record<string, any>[] = Array.isArray(existingData.list)
-      ? existingData.list
-      : [];
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
 
     const existingByProdId = new Map<string, Record<string, any>>();
-    for (const row of existingList) {
-      if (row.product_id) {
-        existingByProdId.set(String(row.product_id), row);
+    const emptyRowIds: number[] = [];
+
+    for (const row of rows) {
+      const nameVal = String(row[schema.nameField] || '').trim();
+      const notesVal = String(row[schema.notesField] || '').trim();
+      if (!nameVal && !notesVal && row.id !== undefined) {
+        emptyRowIds.push(row.id);
+        continue;
+      }
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'product') {
+        const pid = String(env.id || env.data?.id || '');
+        if (pid) existingByProdId.set(pid, row);
       }
     }
 
-    const toUpdate: Record<string, any>[] = [];
-    const toCreate: Record<string, any>[] = [];
     const incomingIds = new Set<string>();
 
-    products.forEach((prod, idx) => {
+    // Upsert each product in order
+    for (let idx = 0; idx < products.length; idx++) {
+      const prod = products[idx];
       incomingIds.add(prod.id);
       const found = existingByProdId.get(prod.id);
-      const mapped = mapProductToNocoRow(prod, idx);
-      if (found && found.Id !== undefined) {
-        toUpdate.push({ Id: found.Id, ...mapped });
+      const payload = buildRowPayload(schema, `PROD::${prod.id} | ${prod.title}`, {
+        recordType: 'product',
+        id: prod.id,
+        orderIndex: idx,
+        updatedAt: new Date().toISOString(),
+        data: prod,
+      });
+
+      if (found && found.id !== undefined) {
+        await baserowRequest(
+          `/api/database/rows/table/${cfg.tableId}/${found.id}/?user_field_names=true`,
+          'PATCH',
+          payload,
+          cfg
+        );
       } else {
-        toCreate.push(mapped);
+        await baserowRequest(
+          `/api/database/rows/table/${cfg.tableId}/?user_field_names=true`,
+          'POST',
+          payload,
+          cfg
+        );
       }
-    });
-
-    const toDelete = existingList
-      .filter((r) => r.product_id && !incomingIds.has(String(r.product_id)) && r.Id !== undefined)
-      .map((r) => ({ Id: r.Id }));
-
-    if (toUpdate.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.productsTableId}/records`, 'PATCH', toUpdate);
     }
-    if (toCreate.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.productsTableId}/records`, 'POST', toCreate);
+
+    // Delete removed products
+    for (const [pid, row] of existingByProdId.entries()) {
+      if (!incomingIds.has(pid) && row.id !== undefined) {
+        await baserowRequest(`/api/database/rows/table/${cfg.tableId}/${row.id}/`, 'DELETE', undefined, cfg);
+      }
     }
-    if (toDelete.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.productsTableId}/records`, 'DELETE', toDelete);
+
+    // Clean up any default blank Baserow rows
+    for (const blankId of emptyRowIds) {
+      await baserowRequest(`/api/database/rows/table/${cfg.tableId}/${blankId}/`, 'DELETE', undefined, cfg);
     }
   } catch (error) {
-    console.error('Error syncing all products to NocoDB:', error);
-  }
-
-  // Secondary backup to Firestore
-  try {
-    const batch = writeBatch(db);
-    products.forEach((prod, index) => {
-      const docRef = doc(db, PRODUCTS_COLLECTION, prod.id);
-      batch.set(
-        docRef,
-        sanitizeForFirestore({
-          ...prod,
-          order: index,
-          updatedAt: new Date().toISOString(),
-        })
-      );
-    });
-    await batch.commit();
-  } catch {
-    // Ignore secondary backup error
+    console.error('Error syncing all products to Baserow:', error);
+    throw error;
+  } finally {
+    // Secondary backup to Firestore
+    try {
+      const batch = writeBatch(db);
+      products.forEach((prod, index) => {
+        const docRef = doc(db, PRODUCTS_COLLECTION, prod.id);
+        batch.set(
+          docRef,
+          sanitizeForFirestore({
+            ...prod,
+            order: index,
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      });
+      await batch.commit();
+    } catch {
+      // Ignore secondary backup error
+    }
   }
 }
 
 // ============================================================================
-// CATEGORIES CRUD (NOCODB PRIMARY + FIRESTORE BACKUP)
+// CATEGORIES CRUD (BASEROW PRIMARY + FIRESTORE BACKUP)
 // ============================================================================
 
 export async function fetchCategoriesFromCloud(): Promise<ShowcaseCategory[]> {
-  const cfg = getNocoDBConfig();
   try {
-    const data = await nocoRequest(
-      `/api/v2/tables/${cfg.categoriesTableId}/records?limit=100&sort=order_index`
-    );
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
-
-    if (list.length === 0) {
-      await syncCategoriesToCloud(initialCategories);
-      return initialCategories;
+    const { schema, rows } = await fetchAllBaserowRows();
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'categories' && Array.isArray(env.data) && env.data.length > 0) {
+        const categories: ShowcaseCategory[] = env.data.map((c: any) => ({
+          id: String(c.id || 'all'),
+          label: String(c.label || 'Categoría'),
+        }));
+        return categories.sort((a, b) => (a.id === 'all' ? -1 : b.id === 'all' ? 1 : 0));
+      }
     }
 
-    list.sort((a, b) => (a.order_index ?? 999) - (b.order_index ?? 999));
-    const categories: ShowcaseCategory[] = list.map((row) => ({
-      id: String(row.category_id || row.id || 'all'),
-      label: String(row.label || 'Categoría'),
-    }));
-
-    return categories.sort((a, b) => (a.id === 'all' ? -1 : b.id === 'all' ? 1 : 0));
-  } catch (nocoErr) {
-    console.warn('NocoDB categories fetch warning, checking fallback:', nocoErr);
+    await syncCategoriesToCloud(initialCategories);
+    return initialCategories;
+  } catch (baserowErr) {
+    console.warn('Baserow categories fetch warning, checking fallback:', baserowErr);
     return initialCategories;
   }
 }
 
 export async function syncCategoriesToCloud(cats: ShowcaseCategory[]): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const existingData = await nocoRequest(
-      `/api/v2/tables/${cfg.categoriesTableId}/records?limit=100`
-    );
-    const existingList: Record<string, any>[] = Array.isArray(existingData.list)
-      ? existingData.list
-      : [];
-
-    const existingByCatId = new Map<string, Record<string, any>>();
-    for (const row of existingList) {
-      if (row.category_id) {
-        existingByCatId.set(String(row.category_id), row);
-      }
-    }
-
-    const toUpdate: Record<string, any>[] = [];
-    const toCreate: Record<string, any>[] = [];
-    const incomingIds = new Set<string>();
-
-    cats.forEach((cat, idx) => {
-      incomingIds.add(cat.id);
-      const found = existingByCatId.get(cat.id);
-      const rowData = {
-        category_id: cat.id,
-        label: cat.label,
-        order_index: idx,
-      };
-      if (found && found.Id !== undefined) {
-        toUpdate.push({ Id: found.Id, ...rowData });
-      } else {
-        toCreate.push(rowData);
-      }
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    const existingRow = rows.find((row) => {
+      const env = parseEnvelope(row, schema);
+      return env && env.recordType === 'categories';
     });
 
-    const toDelete = existingList
-      .filter((r) => r.category_id && !incomingIds.has(String(r.category_id)) && r.Id !== undefined)
-      .map((r) => ({ Id: r.Id }));
+    const payload = buildRowPayload(schema, 'CONFIG::categories | Categorías del Catálogo', {
+      recordType: 'categories',
+      updatedAt: new Date().toISOString(),
+      data: cats,
+    });
 
-    if (toUpdate.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.categoriesTableId}/records`, 'PATCH', toUpdate);
-    }
-    if (toCreate.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.categoriesTableId}/records`, 'POST', toCreate);
-    }
-    if (toDelete.length > 0) {
-      await nocoRequest(`/api/v2/tables/${cfg.categoriesTableId}/records`, 'DELETE', toDelete);
+    if (existingRow && existingRow.id !== undefined) {
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/${existingRow.id}/?user_field_names=true`,
+        'PATCH',
+        payload,
+        cfg
+      );
+    } else {
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/?user_field_names=true`,
+        'POST',
+        payload,
+        cfg
+      );
     }
   } catch (error) {
-    console.error('Error syncing categories to NocoDB:', error);
-  }
-
-  try {
-    const batch = writeBatch(db);
-    cats.forEach((cat, index) => {
-      const docRef = doc(db, CATEGORIES_COLLECTION, cat.id);
-      batch.set(
-        docRef,
-        sanitizeForFirestore({
-          id: cat.id,
-          label: cat.label,
-          order: index,
-          updatedAt: new Date().toISOString(),
-        })
-      );
-    });
-    await batch.commit();
-  } catch {
-    // Ignore secondary backup error
+    console.error('Error syncing categories to Baserow:', error);
+    throw error;
+  } finally {
+    try {
+      const batch = writeBatch(db);
+      cats.forEach((cat, index) => {
+        const docRef = doc(db, CATEGORIES_COLLECTION, cat.id);
+        batch.set(
+          docRef,
+          sanitizeForFirestore({
+            id: cat.id,
+            label: cat.label,
+            order: index,
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      });
+      await batch.commit();
+    } catch {
+      // Ignore secondary backup error
+    }
   }
 }
 
 export async function deleteCategoryFromCloud(categoryId: string): Promise<void> {
-  const cfg = getNocoDBConfig();
   try {
-    const existingData = await nocoRequest(
-      `/api/v2/tables/${cfg.categoriesTableId}/records?limit=100`
-    );
-    const list: Record<string, any>[] = Array.isArray(existingData.list) ? existingData.list : [];
-    const matching = list.filter((r) => r.category_id === categoryId && r.Id !== undefined);
-    if (matching.length > 0) {
-      await nocoRequest(
-        `/api/v2/tables/${cfg.categoriesTableId}/records`,
-        'DELETE',
-        matching.map((r) => ({ Id: r.Id }))
-      );
-    }
+    const current = await fetchCategoriesFromCloud();
+    const filtered = current.filter((c) => c.id !== categoryId);
+    await syncCategoriesToCloud(filtered);
   } catch (error) {
-    console.error('Error deleting category from NocoDB:', error);
+    console.error('Error deleting category from Baserow:', error);
   }
 }
 
 // ============================================================================
-// PROFILE & SETTINGS CRUD (NOCODB PRIMARY + FIRESTORE BACKUP)
+// PROFILE & SETTINGS CRUD (BASEROW PRIMARY + FIRESTORE BACKUP)
 // ============================================================================
 
 export async function fetchProfileFromCloud(): Promise<UserProfile> {
-  const cfg = getNocoDBConfig();
   try {
-    const data = await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records?limit=50`);
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
-    const profileRow = list.find((r) => r.config_key === PROFILE_DOC_ID);
-
-    if (!profileRow) {
-      await saveProfileToCloud(initialProfile);
-      return initialProfile;
+    const { schema, rows } = await fetchAllBaserowRows();
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (env && env.recordType === 'profile' && env.data && env.data.name) {
+        return env.data as UserProfile;
+      }
     }
 
-    const parsed = joinJsonPayload(profileRow) as UserProfile | null;
-    if (parsed && parsed.name) {
-      return {
-        ...parsed,
-        name: profileRow.name || parsed.name,
-        email: profileRow.email || parsed.email,
-      };
-    }
+    await saveProfileToCloud(initialProfile);
     return initialProfile;
-  } catch (nocoErr) {
-    console.warn('NocoDB profile fetch warning, checking fallback:', nocoErr);
+  } catch (baserowErr) {
+    console.warn('Baserow profile fetch warning, checking Firestore backup:', baserowErr);
     try {
       const profileRef = doc(db, CONFIG_COLLECTION, PROFILE_DOC_ID);
       const docSnap = await getDoc(profileRef);
@@ -543,61 +660,76 @@ export async function fetchProfileFromCloud(): Promise<UserProfile> {
 }
 
 export async function saveProfileToCloud(profile: UserProfile): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const data = await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records?limit=50`);
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
-    const existingRow = list.find((r) => r.config_key === PROFILE_DOC_ID);
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    const existingRow = rows.find((row) => {
+      const env = parseEnvelope(row, schema);
+      return env && env.recordType === 'profile';
+    });
 
-    const rowData = {
-      config_key: PROFILE_DOC_ID,
-      name: profile.name || '',
-      email: profile.email || '',
-      whatsapp: profile.whatsappNumber || profile.whatsapp || '',
-      ...splitJsonPayload(profile),
-    };
+    const payload = buildRowPayload(
+      schema,
+      `CONFIG::profile | ${profile.name || 'Perfil EDUCOM'}`,
+      {
+        recordType: 'profile',
+        updatedAt: new Date().toISOString(),
+        data: profile,
+      }
+    );
 
-    if (existingRow && existingRow.Id !== undefined) {
-      await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records`, 'PATCH', {
-        Id: existingRow.Id,
-        ...rowData,
-      });
+    if (existingRow && existingRow.id !== undefined) {
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/${existingRow.id}/?user_field_names=true`,
+        'PATCH',
+        payload,
+        cfg
+      );
     } else {
-      await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records`, 'POST', rowData);
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/?user_field_names=true`,
+        'POST',
+        payload,
+        cfg
+      );
     }
   } catch (error) {
-    console.error('Error saving profile to NocoDB:', error);
-  }
-
-  try {
-    const profileRef = doc(db, CONFIG_COLLECTION, PROFILE_DOC_ID);
-    await setDoc(
-      profileRef,
-      sanitizeForFirestore({
-        ...profile,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
-  } catch {
-    // Ignore secondary backup error
+    console.error('Error saving profile to Baserow:', error);
+    throw error;
+  } finally {
+    try {
+      const profileRef = doc(db, CONFIG_COLLECTION, PROFILE_DOC_ID);
+      await setDoc(
+        profileRef,
+        sanitizeForFirestore({
+          ...profile,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+    } catch {
+      // Ignore secondary backup error
+    }
   }
 }
 
 export async function fetchAdminPasswordFromCloud(): Promise<string | null> {
-  const cfg = getNocoDBConfig();
   try {
-    const data = await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records?limit=50`);
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
-    const settingsRow = list.find((r) => r.config_key === SETTINGS_DOC_ID);
-    if (settingsRow) {
-      const parsed = joinJsonPayload(settingsRow);
-      if (parsed && typeof parsed.adminPassword === 'string' && parsed.adminPassword.trim()) {
-        return parsed.adminPassword;
+    const { schema, rows } = await fetchAllBaserowRows();
+    for (const row of rows) {
+      const env = parseEnvelope(row, schema);
+      if (
+        env &&
+        env.recordType === 'settings' &&
+        env.data &&
+        typeof env.data.adminPassword === 'string' &&
+        env.data.adminPassword.trim()
+      ) {
+        return env.data.adminPassword;
       }
     }
   } catch (error) {
-    console.warn('Error reading admin password from NocoDB:', error);
+    console.warn('Error reading admin password from Baserow:', error);
   }
 
   try {
@@ -613,35 +745,40 @@ export async function fetchAdminPasswordFromCloud(): Promise<string | null> {
 }
 
 export async function saveAdminPasswordToCloud(password: string): Promise<void> {
-  const cfg = getNocoDBConfig();
+  const cfg = getBaserowConfig();
   try {
-    const data = await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records?limit=50`);
-    const list: Record<string, any>[] = Array.isArray(data.list) ? data.list : [];
-    const existingRow = list.find((r) => r.config_key === SETTINGS_DOC_ID);
+    const { schema, rows } = await fetchAllBaserowRows(cfg);
+    const existingRow = rows.find((row) => {
+      const env = parseEnvelope(row, schema);
+      return env && env.recordType === 'settings';
+    });
 
-    const payloadObj = {
-      adminPassword: password,
+    const payload = buildRowPayload(schema, 'CONFIG::settings | Seguridad y Clave Admin', {
+      recordType: 'settings',
       updatedAt: new Date().toISOString(),
-    };
+      data: {
+        adminPassword: password,
+        updatedAt: new Date().toISOString(),
+      },
+    });
 
-    const rowData = {
-      config_key: SETTINGS_DOC_ID,
-      name: 'Admin Settings',
-      email: '',
-      whatsapp: '',
-      ...splitJsonPayload(payloadObj),
-    };
-
-    if (existingRow && existingRow.Id !== undefined) {
-      await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records`, 'PATCH', {
-        Id: existingRow.Id,
-        ...rowData,
-      });
+    if (existingRow && existingRow.id !== undefined) {
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/${existingRow.id}/?user_field_names=true`,
+        'PATCH',
+        payload,
+        cfg
+      );
     } else {
-      await nocoRequest(`/api/v2/tables/${cfg.configTableId}/records`, 'POST', rowData);
+      await baserowRequest(
+        `/api/database/rows/table/${cfg.tableId}/?user_field_names=true`,
+        'POST',
+        payload,
+        cfg
+      );
     }
   } catch (error) {
-    console.error('Error saving admin password to NocoDB:', error);
+    console.error('Error saving admin password to Baserow:', error);
   }
 
   try {

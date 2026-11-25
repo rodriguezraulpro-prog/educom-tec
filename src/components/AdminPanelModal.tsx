@@ -61,12 +61,14 @@ import {
   fetchAdminPasswordFromCloud,
   saveAdminPasswordToCloud,
   deleteProductFromCloud,
-  getNocoDBConfig,
-  saveNocoDBConfig,
+  getBaserowConfig,
+  saveBaserowConfig,
+  getBaserowTableWebUrl,
+  testBaserowConnection,
   syncAllProductsToCloud,
   syncCategoriesToCloud,
   saveProfileToCloud,
-  NocoDBConfig,
+  BaserowConfig,
 } from '../lib/firestoreService';
 import {
   downloadStandaloneHtml,
@@ -184,9 +186,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // NocoDB configuration state
-  const [nocoConfig, setNocoConfig] = useState<NocoDBConfig>(() => getNocoDBConfig());
-  const [isSyncingNoco, setIsSyncingNoco] = useState(false);
+  // Baserow Cloud configuration state
+  const [baserowConfig, setBaserowConfig] = useState<BaserowConfig>(() => getBaserowConfig());
+  const [isSyncingBaserow, setIsSyncingBaserow] = useState(false);
+  const [isTestingBaserow, setIsTestingBaserow] = useState(false);
+  const [showBaserowToken, setShowBaserowToken] = useState(false);
+  const [baserowTestStatus, setBaserowTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Experience editing
   const [editingExpIdx, setEditingExpIdx] = useState<number | null>(null);
@@ -315,7 +320,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 Educom-Tec // Admin Center
               </span>
               <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 block">
-                admin.html • consola de gestión y NocoDB
+                admin.html • consola de gestión y Baserow Cloud
               </span>
             </div>
           </div>
@@ -371,7 +376,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 Acceso al Panel Admin
               </h1>
               <p className="text-xs font-mono text-slate-500 dark:text-zinc-400">
-                Ingresa tu clave administrativa para gestionar el catálogo de sistemas, perfil y base de datos NocoDB desde tu PC o teléfono móvil.
+                Ingresa tu clave administrativa para gestionar el catálogo de sistemas, perfil y base de datos Baserow desde tu PC o teléfono móvil.
               </p>
             </div>
 
@@ -414,8 +419,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </form>
 
             <div className="pt-4 border-t border-slate-200 dark:border-[#262d3a] flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-zinc-500">
-              <span>NocoDB Base: {nocoConfig.baseId}</span>
-              <span className="text-emerald-600 dark:text-[#00c2b2] font-semibold">● Cloud Ready</span>
+              <span>Baserow Tabla: {baserowConfig.tableId}</span>
+              <span className="text-emerald-600 dark:text-[#00c2b2] font-semibold">● Baserow Ready</span>
             </div>
           </div>
         </div>
@@ -550,7 +555,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     onUpdateProducts(updatedList);
     setEditingProductId(null);
     setIsCreatingProduct(false);
-    showToast('¡Sistema guardado y sincronizado con NocoDB Cloud!');
+    showToast('¡Sistema guardado y sincronizado con Baserow Cloud!');
   };
 
   const handleDeleteProduct = (id: string, title: string) => {
@@ -792,20 +797,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // ----------------------------------------------------
   // SECURITY, SYNC & JSON BACKUP LOGIC
   // ----------------------------------------------------
-  const handleManualNocoSync = async () => {
-    setIsSyncingNoco(true);
+  const handleTestBaserow = async () => {
+    setIsTestingBaserow(true);
+    setBaserowTestStatus(null);
     try {
-      saveNocoDBConfig(nocoConfig);
+      const result = await testBaserowConnection(baserowConfig);
+      setBaserowTestStatus({ ok: result.ok, message: result.message });
+      showToast(result.ok ? '¡Conexión con Baserow verificada!' : 'No se pudo conectar con Baserow.');
+    } catch {
+      setBaserowTestStatus({ ok: false, message: 'Error de red al probar Baserow.' });
+      showToast('Error de red al probar Baserow.');
+    } finally {
+      setIsTestingBaserow(false);
+    }
+  };
+
+  const handleManualBaserowSync = async () => {
+    setIsSyncingBaserow(true);
+    try {
+      saveBaserowConfig(baserowConfig);
       await Promise.all([
         syncAllProductsToCloud(draftProducts),
         syncCategoriesToCloud(draftCategories),
         saveProfileToCloud(draftProfile),
       ]);
-      showToast('¡Sincronización completa con NocoDB Cloud exitosa!');
+      showToast('¡Sincronización completa con Baserow Cloud exitosa!');
     } catch {
-      showToast('Error al sincronizar con NocoDB. Verifica la conexión.');
+      showToast('Error al sincronizar con Baserow. Verifica tu Token y Table ID.');
     } finally {
-      setIsSyncingNoco(false);
+      setIsSyncingBaserow(false);
     }
   };
 
@@ -871,7 +891,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     saveAdminPasswordToCloud(newPassword).catch((e) => console.error('Cloud password error:', e));
     setNewPassword('');
     setConfirmPassword('');
-    showToast('¡Contraseña de administrador actualizada en NocoDB Cloud y localmente!');
+    showToast('¡Contraseña de administrador actualizada en Baserow Cloud y localmente!');
   };
 
   const handleResetFactory = () => {
@@ -948,8 +968,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     },
     {
       id: 'security',
-      label: 'Base de Datos NocoDB & Exportar',
-      shortLabel: 'NocoDB',
+      label: 'Base de Datos Baserow & Exportar',
+      shortLabel: 'Baserow',
       icon: <Database className="w-4 h-4" />,
       group: 'SISTEMA & NUBE',
     },
@@ -1009,7 +1029,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono hidden md:block truncate">
-                Centro de control • NocoDB Cloud ({nocoConfig.baseId})
+                Centro de control • Baserow Cloud (Tabla {baserowConfig.tableId})
               </p>
             </div>
           </div>
@@ -1063,14 +1083,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
             <button
               type="button"
-              disabled={isSyncingNoco}
-              onClick={handleManualNocoSync}
+              disabled={isSyncingBaserow}
+              onClick={handleManualBaserowSync}
               className="min-h-[38px] inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#161b26] hover:bg-slate-200 dark:hover:bg-[#1e2534] border border-[#00c2b2]/40 text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-semibold transition-colors cursor-pointer disabled:opacity-50"
-              title="Sincronizar con NocoDB Cloud"
+              title="Sincronizar con Baserow Cloud"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNoco ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBaserow ? 'animate-spin' : ''}`} />
               <span className="hidden xl:inline">
-                {isSyncingNoco ? 'Sincronizando...' : 'Sincronizar NocoDB'}
+                {isSyncingBaserow ? 'Sincronizando...' : 'Sincronizar Baserow'}
               </span>
             </button>
 
@@ -1306,7 +1326,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </button>
 
               <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-zinc-500 px-1">
-                <span>NocoDB Cloud</span>
+                <span>Baserow Cloud</span>
                 <span className="text-emerald-600 dark:text-[#00c2b2] flex items-center gap-1 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-[#00c2b2]" /> Conectado
                 </span>
@@ -1331,7 +1351,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         Bienvenido, {draftProfile.name.split(' ')[0] || 'Raúl'}
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-1">
-                        Gestiona todos los sistemas del catálogo, enlaces de demostración, perfil profesional y respaldos en NocoDB Cloud desde tu PC o smartphone.
+                        Gestiona todos los sistemas del catálogo, enlaces de demostración, perfil profesional y respaldos en Baserow Cloud desde tu PC o smartphone.
                       </p>
                     </div>
 
@@ -1416,12 +1436,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                     <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#12161f] border border-[#00c2b2]/40 flex flex-col justify-between shadow-xs">
                       <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 text-[11px] sm:text-xs font-mono">
-                        <span>NOCODB CLOUD</span>
+                        <span>BASEROW CLOUD</span>
                         <Database className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
                       </div>
                       <div className="mt-3 flex items-baseline justify-between gap-1">
                         <span className="text-xs sm:text-base font-bold font-mono text-[#008f82] dark:text-[#00c2b2] truncate">
-                          {nocoConfig.baseId}
+                          #{baserowConfig.tableId}
                         </span>
                         <button
                           type="button"
@@ -3234,35 +3254,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               )}
 
               {/* ========================================================= */}
-              {/* TAB 7: NOCODB DATABASE, EXPORT & SECURITY */}
+              {/* TAB 7: BASEROW DATABASE, EXPORT & SECURITY */}
               {/* ========================================================= */}
               {activeTab === 'security' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div>
                     <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
-                      Base de Datos NocoDB Cloud, Exportación HTML & Seguridad
+                      Base de Datos Baserow Cloud, Exportación HTML & Seguridad
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
-                      Configura la sincronización en tiempo real con NocoDB Cloud, descarga tus páginas independientes o cambia tu clave.
+                      Configura la sincronización en tiempo real con tu tabla en Baserow, descarga tus páginas independientes o cambia tu clave.
                     </p>
                   </div>
 
-                  {/* NocoDB Cloud Card */}
+                  {/* Baserow Cloud Card */}
                   <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#12161f] border border-[#00c2b2]/40 space-y-4 shadow-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 dark:bg-[#00c2b2] animate-pulse" />
                         <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#008f82] dark:text-[#00c2b2]">
-                          Base de Datos Principal: NocoDB Cloud (Conectada)
+                          Base de Datos Principal: Baserow Cloud (Conectada)
                         </span>
                       </div>
                       <a
-                        href={`${nocoConfig.baseUrl}/#/nc/${nocoConfig.baseId}`}
+                        href={getBaserowTableWebUrl(baserowConfig)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-[#008f82] dark:text-[#00c2b2] hover:underline"
                       >
-                        <span>Abrir Base en NocoDB</span>
+                        <span>Abrir Tabla en Baserow</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
@@ -3270,82 +3290,106 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
-                          URL Servidor NocoDB
+                          URL API Baserow
                         </label>
                         <input
                           type="text"
-                          value={nocoConfig.baseUrl}
-                          onChange={(e) => setNocoConfig({ ...nocoConfig, baseUrl: e.target.value })}
+                          value={baserowConfig.apiUrl}
+                          onChange={(e) => setBaserowConfig({ ...baserowConfig, apiUrl: e.target.value })}
                           className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div>
                         <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
-                          Base ID (Proyecto)
+                          Database ID
                         </label>
                         <input
                           type="text"
-                          value={nocoConfig.baseId}
-                          onChange={(e) => setNocoConfig({ ...nocoConfig, baseId: e.target.value })}
+                          value={baserowConfig.databaseId}
+                          onChange={(e) => setBaserowConfig({ ...baserowConfig, databaseId: e.target.value })}
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
+                          Table ID (Tabla Principal)
+                        </label>
+                        <input
+                          type="text"
+                          value={baserowConfig.tableId}
+                          onChange={(e) => setBaserowConfig({ ...baserowConfig, tableId: e.target.value })}
+                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
+                          View ID (Vista en Baserow)
+                        </label>
+                        <input
+                          type="text"
+                          value={baserowConfig.viewId}
+                          onChange={(e) => setBaserowConfig({ ...baserowConfig, viewId: e.target.value })}
                           className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                         />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
-                          API Token (xc-token)
+                          Database Token (Authorization: Token)
                         </label>
-                        <input
-                          type="password"
-                          value={nocoConfig.apiToken}
-                          onChange={(e) => setNocoConfig({ ...nocoConfig, apiToken: e.target.value })}
-                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
-                          Tabla Productos (ID)
-                        </label>
-                        <input
-                          type="text"
-                          value={nocoConfig.productsTableId}
-                          onChange={(e) => setNocoConfig({ ...nocoConfig, productsTableId: e.target.value })}
-                          className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-mono text-slate-500 dark:text-zinc-400 mb-1">
-                          Tablas Categorías / Config (IDs)
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
                           <input
-                            type="text"
-                            value={nocoConfig.categoriesTableId}
-                            onChange={(e) => setNocoConfig({ ...nocoConfig, categoriesTableId: e.target.value })}
-                            className={`w-full min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
+                            type={showBaserowToken ? 'text' : 'password'}
+                            value={baserowConfig.apiToken}
+                            onChange={(e) => setBaserowConfig({ ...baserowConfig, apiToken: e.target.value })}
+                            className={`w-full min-h-[42px] pl-3 pr-11 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
                           />
-                          <input
-                            type="text"
-                            value={nocoConfig.configTableId}
-                            onChange={(e) => setNocoConfig({ ...nocoConfig, configTableId: e.target.value })}
-                            className={`w-full min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-mono ${inputSurface}`}
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowBaserowToken(!showBaserowToken)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                            title={showBaserowToken ? 'Ocultar token' : 'Mostrar token'}
+                          >
+                            {showBaserowToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
                         </div>
                       </div>
                     </div>
 
-                    <div className="pt-2">
+                    {baserowTestStatus && (
+                      <div
+                        className={`p-3 rounded-xl text-xs font-mono border ${
+                          baserowTestStatus.ok
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-300'
+                        }`}
+                      >
+                        {baserowTestStatus.message}
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex flex-col sm:flex-row flex-wrap gap-3">
                       <button
                         type="button"
-                        disabled={isSyncingNoco}
-                        onClick={handleManualNocoSync}
+                        disabled={isSyncingBaserow}
+                        onClick={handleManualBaserowSync}
                         className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c2b2] hover:bg-[#00d6c4] text-[#0b0e14] font-syne font-bold uppercase text-xs cursor-pointer disabled:opacity-50"
                       >
                         <Save className="w-4 h-4" />
                         <span>
-                          {isSyncingNoco
-                            ? 'Sincronizando con NocoDB...'
-                            : 'Guardar & Sincronizar Todo con NocoDB'}
+                          {isSyncingBaserow
+                            ? 'Sincronizando con Baserow...'
+                            : 'Guardar & Sincronizar Todo con Baserow'}
                         </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isTestingBaserow}
+                        onClick={handleTestBaserow}
+                        className={`w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-mono font-bold cursor-pointer disabled:opacity-50 ${btnSecondary}`}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingBaserow ? 'animate-spin' : ''}`} />
+                        <span>{isTestingBaserow ? 'Probando...' : 'Probar Conexión Baserow'}</span>
                       </button>
                     </div>
                   </div>
@@ -3524,7 +3568,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           <span>Educom-Tec Admin Center (admin.html) • Raúl Eduardo Rodríguez</span>
           <span className="text-emerald-600 dark:text-[#00c2b2] flex items-center gap-1.5 font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-[#00c2b2] animate-pulse" />
-            <span>NocoDB Cloud Activo (Base: {nocoConfig.baseId})</span>
+            <span>Baserow Cloud Activo (DB: {baserowConfig.databaseId} • Tabla: {baserowConfig.tableId})</span>
           </span>
         </footer>
       </div>

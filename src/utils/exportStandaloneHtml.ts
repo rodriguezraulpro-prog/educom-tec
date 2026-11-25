@@ -115,7 +115,7 @@ export async function downloadStandaloneHtml(
       'educom_profile_v4',
       'educom_categories_v4',
       'educom_admin_password_v4',
-      'educom_nocodb_config_v1',
+      'educom_baserow_config_v1',
     ];
     for (const k of keys) {
       const val = localStorage.getItem(k);
