@@ -24,7 +24,6 @@ import {
   Facebook,
   Globe,
   Youtube,
-  Download,
   LayoutDashboard,
   Search,
   ArrowUp,
@@ -70,10 +69,6 @@ import {
   saveProfileToCloud,
   BaserowConfig,
 } from '../lib/firestoreService';
-import {
-  downloadStandaloneHtml,
-  downloadStandaloneAdminHtml,
-} from '../utils/exportStandaloneHtml';
 
 async function compressImageFile(file: File, maxWidth = 1280, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -968,7 +963,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     },
     {
       id: 'security',
-      label: 'Base de Datos Baserow & Exportar',
+      label: 'Base de Datos Baserow & Seguridad',
       shortLabel: 'Baserow',
       icon: <Database className="w-4 h-4" />,
       group: 'SISTEMA & NUBE',
@@ -1092,25 +1087,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <span className="hidden xl:inline">
                 {isSyncingBaserow ? 'Sincronizando...' : 'Sincronizar Baserow'}
               </span>
-            </button>
-
-            <button
-              id="admin-download-portable-btn"
-              type="button"
-              onClick={async () => {
-                try {
-                  showToast('Generando index.html portátil...');
-                  await downloadStandaloneHtml('index.html');
-                  showToast('¡index.html descargado!');
-                } catch {
-                  showToast('Error al generar archivo index.html.');
-                }
-              }}
-              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
-              title="Descargar index.html autónomo"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Descargar Web</span>
             </button>
 
             <button
@@ -1364,18 +1340,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <Plus className="w-4 h-4 stroke-[2.5]" />
                         <span>+ Agregar Sistema</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          showToast('Descargando admin.html independiente...');
-                          await downloadStandaloneAdminHtml();
-                          showToast('¡admin.html descargado exitosamente!');
-                        }}
-                        className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-mono font-semibold cursor-pointer ${btnSecondary}`}
-                      >
-                        <Download className="w-3.5 h-3.5 text-[#008f82] dark:text-[#00c2b2]" />
-                        <span>Descargar admin.html</span>
-                      </button>
                     </div>
                   </div>
 
@@ -1455,33 +1419,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
 
                   {/* Quick Management Modules Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className={`p-5 rounded-2xl space-y-3 ${cardSurface}`}>
-                      <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
-                        <Download className="w-4 h-4 text-[#008f82] dark:text-[#00c2b2]" />
-                        <span>Exportar Archivos HTML Portátiles</span>
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
-                        Descarga tanto la página pública (<code className="font-mono text-slate-800 dark:text-zinc-200">index.html</code>) como este panel administrativo independiente (<code className="font-mono text-slate-800 dark:text-zinc-200">admin.html</code>).
-                      </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => downloadStandaloneHtml('index.html')}
-                          className="min-h-[38px] px-3 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
-                        >
-                          Descargar index.html
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => downloadStandaloneAdminHtml()}
-                          className={`min-h-[38px] px-3 py-2 rounded-xl text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-bold cursor-pointer ${btnSecondary}`}
-                        >
-                          Descargar admin.html
-                        </button>
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className={`p-5 rounded-2xl space-y-3 ${cardSurface}`}>
                       <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white flex items-center gap-2">
                         <MessageCircle className="w-4 h-4 text-[#25D366]" />
@@ -3254,16 +3192,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               )}
 
               {/* ========================================================= */}
-              {/* TAB 7: BASEROW DATABASE, EXPORT & SECURITY */}
+              {/* TAB 7: BASEROW DATABASE & SECURITY */}
               {/* ========================================================= */}
               {activeTab === 'security' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div>
                     <h2 className="text-xl font-bold font-syne text-slate-900 dark:text-white">
-                      Base de Datos Baserow Cloud, Exportación HTML & Seguridad
+                      Base de Datos Baserow Cloud & Seguridad
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
-                      Configura la sincronización en tiempo real con tu tabla en Baserow, descarga tus páginas independientes o cambia tu clave.
+                      Configura la sincronización en tiempo real con tu tabla en Baserow o cambia tu clave administrativa.
                     </p>
                   </div>
 
@@ -3390,34 +3328,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isTestingBaserow ? 'animate-spin' : ''}`} />
                         <span>{isTestingBaserow ? 'Probando...' : 'Probar Conexión Baserow'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Standalone HTML Export Card */}
-                  <div className={`p-4 sm:p-6 rounded-2xl space-y-4 ${cardSurface}`}>
-                    <h3 className="text-sm font-bold font-syne text-slate-900 dark:text-white uppercase tracking-wider">
-                      Descarga de Páginas Independientes (index.html y admin.html)
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400">
-                      Si subes tus archivos a Cloudflare Pages, GitHub Pages o los usas localmente, puedes descargar ambos archivos compilados con tus últimos cambios.
-                    </p>
-                    <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => downloadStandaloneHtml('index.html')}
-                        className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-500 text-white text-xs font-mono font-bold cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span>Descargar index.html (Web Pública)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadStandaloneAdminHtml()}
-                        className={`min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[#008f82] dark:text-[#00c2b2] text-xs font-mono font-bold cursor-pointer ${btnSecondary}`}
-                      >
-                        <Download className="w-4 h-4" />
-                        <span>Descargar admin.html (Panel Admin Separado)</span>
                       </button>
                     </div>
                   </div>
